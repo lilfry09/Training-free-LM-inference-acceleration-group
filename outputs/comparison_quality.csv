@@ -1,9 +1,0 @@
-dataset,split,method,chunked_ppl,chunked_tokens,cache_ppl,cache_tokens,cache_context_len,kv_events,kv_avg_compression,source
-pg19,test,baseline,33.573871413736256,4095,29.601992537165675,256,512,0,,metrics_baseline_pg19_test.json
-pg19,test,gqa_reduced_kv2,816.6954209495186,4095,776.882581186258,256,512,0,,metrics_gqa_pg19_test.json
-pg19,test,kvpress_knorm_r0.5,33.573871413736256,4095,31.757461414736678,256,512,78,0.5,metrics_kvpress_knorm_r0.5_pg19_test.json
-pg19,test,kvpress_streamingllm_r0.5_sink4,33.573871413736256,4095,29.486056914473217,256,512,78,0.5,metrics_kvpress_streamingllm_r0.5_pg19_test.json
-wikitext,test,baseline,63.718854139590285,4095,13.088739039473024,256,512,0,,metrics_baseline_wikitext_test.json
-wikitext,test,gqa_reduced_kv2,2258.0113025770925,4095,3659.004913723472,256,512,0,,metrics_gqa_wikitext_test.json
-wikitext,test,kvpress_knorm_r0.5,63.718854139590285,4095,52.436600846025996,256,512,78,0.5,metrics_kvpress_knorm_r0.5_wikitext_test.json
-wikitext,test,kvpress_streamingllm_r0.5_sink4,63.718854139590285,4095,61.29974088786784,256,512,78,0.5,metrics_kvpress_streamingllm_r0.5_wikitext_test.json

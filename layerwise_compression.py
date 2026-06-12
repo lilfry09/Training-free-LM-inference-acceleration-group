@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import ceil
+import time
 from typing import Any, Iterable, Sequence
 
 import torch
@@ -264,8 +265,10 @@ class LayerWiseKVCompressor:
         generated = input_ids.clone()
         past_key_values = None
         retained_token_slots: list[int] = []
+        step_times: list[float] = []
 
         for step in range(max_new_tokens):
+            step_start = time.perf_counter()
             if past_key_values is None:
                 current_input = generated
                 absolute_position = 0
@@ -282,10 +285,13 @@ class LayerWiseKVCompressor:
             if should_compress:
                 past_key_values = self._compress(past_key_values)
             retained_token_slots.append(cache_token_count(past_key_values))
+            step_times.append(time.perf_counter() - step_start)
 
             if eos_token_id is not None and torch.all(next_token.eq(eos_token_id)):
                 break
 
+        ttft = step_times[0] if step_times else 0.0
+        tpot = sum(step_times[1:]) / len(step_times[1:]) if len(step_times) > 1 else 0.0
         stats = {
             "avg_cache_tokens_per_layer": (
                 sum(retained_token_slots) / len(retained_token_slots) / self.total_layers
@@ -293,6 +299,8 @@ class LayerWiseKVCompressor:
                 else 0.0
             ),
             "generated_tokens": float(generated.shape[1] - input_ids.shape[1]),
+            "ttft_sec": ttft,
+            "tpot_sec": tpot,
         }
         return generated, stats
 

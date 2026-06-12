@@ -138,12 +138,12 @@ def time_generation(
     compress: bool,
 ) -> tuple[float, dict[str, float]]:
     runs = []
-    last_stats: dict[str, float] = {}
+    stats_runs: list[dict[str, float]] = []
 
     for _ in range(repeats):
         sync_if_needed(device)
         start = time.perf_counter()
-        _, last_stats = compressor.generate(
+        _, run_stats = compressor.generate(
             prompt_ids,
             max_new_tokens=max_new_tokens,
             eos_token_id=None,
@@ -151,8 +151,23 @@ def time_generation(
         )
         sync_if_needed(device)
         runs.append(time.perf_counter() - start)
+        stats_runs.append(run_stats)
 
-    return sum(runs) / len(runs), last_stats
+    avg_stats: dict[str, float] = {}
+    for key in stats_runs[0]:
+        values = [float(stats[key]) for stats in stats_runs]
+        avg_stats[key] = sum(values) / len(values)
+
+    return sum(runs) / len(runs), avg_stats
+
+
+def approx_decode_attention_flops(model, avg_cache_tokens_per_layer: float) -> float:
+    config = model.config
+    layers = int(getattr(config, "num_hidden_layers", 1))
+    heads = int(getattr(config, "num_attention_heads", 1))
+    hidden_size = int(getattr(config, "hidden_size", heads))
+    head_dim = hidden_size / heads
+    return 4.0 * layers * heads * avg_cache_tokens_per_layer * head_dim
 
 
 @torch.no_grad()
@@ -233,15 +248,26 @@ def evaluate_method(
     if dense_cache_tokens:
         cache_reduction = max(0.0, 1.0 - avg_cache_tokens / dense_cache_tokens)
 
+    flops = approx_decode_attention_flops(compressor.model, avg_cache_tokens)
+    flops_reduction = 0.0
+    if dense_cache_tokens:
+        dense_flops = approx_decode_attention_flops(compressor.model, dense_cache_tokens)
+        flops_reduction = max(0.0, 1.0 - flops / dense_flops)
+
     return {
         "method": name,
         "ppl": round(ppl, 4),
         "generation_time_sec": round(gen_time, 4),
+        "ttft_sec": round(float(gen_stats.get("ttft_sec", 0.0)), 4),
+        "tpot_sec": round(float(gen_stats.get("tpot_sec", 0.0)), 4),
         "tokens_per_sec": round(args.max_new_tokens / gen_time, 4),
         "speedup": round(speedup, 4),
         "avg_cache_tokens_per_layer": round(avg_cache_tokens, 4),
         "ppl_final_cache_tokens_per_layer": round(ppl_cache_tokens, 4),
         "cache_reduction": round(cache_reduction, 4),
+        "approx_decode_attention_flops_per_token": int(round(flops)),
+        "approx_decode_attention_mflops_per_token": round(flops / 1_000_000, 4),
+        "approx_decode_attention_flops_reduction": round(flops_reduction, 4),
         "ppl_scored_tokens": int(scored_tokens),
     }
 
@@ -386,12 +412,13 @@ def main() -> list[dict[str, object]]:
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-    print("\n| Method | PPL | Time (s) | Tokens/s | Speedup | Cache Reduction |")
-    print("|---|---:|---:|---:|---:|---:|")
+    print("\n| Method | PPL | Time (s) | TTFT | TPOT | Tokens/s | Speedup | Cache Reduction |")
+    print("|---|---:|---:|---:|---:|---:|---:|---:|")
     for row in results:
         print(
             f"| {row['method']} | {row['ppl']} | {row['generation_time_sec']} | "
-            f"{row['tokens_per_sec']} | {row['speedup']}x | {row['cache_reduction']:.1%} |"
+            f"{row['ttft_sec']} | {row['tpot_sec']} | {row['tokens_per_sec']} | "
+            f"{row['speedup']}x | {row['cache_reduction']:.1%} |"
         )
     print(f"\nSaved: {args.output_json.resolve()}")
     return results
