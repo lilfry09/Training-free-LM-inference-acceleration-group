@@ -90,6 +90,19 @@ also evaluate two uniform baselines: Uniform-50\% and Uniform-67\%.  The latter
 matches the approximate average keep ratio of the layer-wise schedule, so it
 tests whether the depth-dependent allocation itself is useful.
 
+\paragraph{Operational algorithm.}
+Algorithmically, the method takes the HuggingFace past-cache object returned by
+prefill and rewrites only its sequence dimension.  For each layer $l$, it reads
+the key/value tensors with shape $[B,H,L_l,d]$, computes the layer budget $K_l$,
+and builds an index set
+$I_l=[0,\ldots,S-1]\cup[L_l-(K_l-S),\ldots,L_l-1]$, where $S=4$ is the number of
+sink tokens.  Both key and value tensors are then sliced along the cache-length
+dimension with this same index set.  Layer metadata and tensor dtype/device are
+preserved.  During decoding, the model receives the compressed cache as its
+normal past cache and appends new tokens in the usual autoregressive loop.  No
+attention weights, hidden states, or model parameters are changed; the only
+intervention is this deterministic cache-slicing step.
+
 \paragraph{Metrics.}
 Cached continuation PPL scores true continuation tokens after a 96-token
 prefill.  Speed uses greedy generation of 32 new tokens and reports TTFT,
