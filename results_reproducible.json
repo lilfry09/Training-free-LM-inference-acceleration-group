@@ -1,0 +1,20 @@
+[
+  {
+    "method": "Dense",
+    "ppl": 1.54,
+    "time": 0.835,
+    "speedup": "1.00x"
+  },
+  {
+    "method": "Uniform-50%",
+    "ppl": 1.54,
+    "time": 0.653,
+    "speedup": "1.28x"
+  },
+  {
+    "method": "LayerWise",
+    "ppl": 1.54,
+    "time": 0.653,
+    "speedup": "1.28x"
+  }
+]
