@@ -2,25 +2,25 @@
   {
     "method": "Dense",
     "ppl": 39.09,
-    "ttft_ms": 64.6,
-    "tpot_ms": 20.21,
-    "time": 1.055,
-    "speedup": "1.00x"
+    "time": 2.112,
+    "kv_memory": 600600,
+    "compression_ratio": "0%",
+    "speedup": "1.00x (baseline)"
   },
   {
     "method": "Uniform-50%",
     "ppl": 39.09,
-    "ttft_ms": 68.5,
-    "tpot_ms": 19.75,
-    "time": 1.036,
-    "speedup": "1.02x"
+    "time": 2.207,
+    "kv_memory": 300300,
+    "compression_ratio": "50%",
+    "speedup": "0.96x (\u5b9e\u9645), 2.00x (\u7406\u8bba)"
   },
   {
     "method": "LayerWise",
     "ppl": 39.09,
-    "ttft_ms": 73.84,
-    "tpot_ms": 20.08,
-    "time": 1.058,
-    "speedup": "1.00x"
+    "time": 2.17,
+    "kv_memory": 380380,
+    "compression_ratio": "37%",
+    "speedup": "0.97x (\u5b9e\u9645), 1.58x (\u7406\u8bba)"
   }
 ]

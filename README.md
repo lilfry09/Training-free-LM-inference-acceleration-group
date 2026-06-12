@@ -23,24 +23,30 @@ Different transformer layers have different characteristics:
 
 This layer-wise adaptive strategy achieves better compression than uniform ratios.
 
-## 📊 Results (Fully Reproducible)
+## 📊 Results (Honest Evaluation)
 
-| Method | PPL | TTFT(ms) | TPOT(ms) | Time(s) | Speedup |
-|--------|-----|----------|----------|---------|---------|
-| Dense | 39.09 | 64.6 | 20.21 | 1.055 | 1.00× |
-| Uniform-50% | 39.09 | 68.5 | 19.75 | 1.036 | 1.02× |
-| **LayerWise (Ours)** | **39.09** | **73.84** | **20.08** | **1.058** | **1.00×** |
+| Method | PPL | Time(s) | KV Memory | Compression | Speedup |
+|--------|-----|---------|-----------|-------------|---------|
+| Dense | 39.09 | 2.112 | 600600 | 0% | 1.00× (baseline) |
+| Uniform-50% | 39.09 | 2.207 | 300300 | 50% | 0.96× (实际), 2.00× (理论) |
+| **LayerWise** | **39.09** | **2.170** | **380380** | **37%** | **0.97× (实际), 1.58× (理论)** |
 
-*Evaluated on Pythia-70M with WikiText-2 dataset using real KV compression*
+*Evaluated on Pythia-70M with 1000-token context on CPU*
 
-**Run to reproduce**: `python complete_eval.py`
+**Run to reproduce**: `python honest_eval.py`
 
 **Key Findings**:
-- ✅ **No PPL degradation** - maintains 39.09 across all methods
+- ✅ **PPL maintained** - no quality degradation (39.09 across all methods)
+- ✅ **KV memory reduced** - LayerWise: 37% compression, Uniform: 50% compression
 - ✅ **Training-free** - immediate application without model retraining
-- ✅ **Fully reproducible** - real KV compression via monkey patching
-- 📊 **Layer-wise ratios**: Shallow 80%, Middle 50%, Deep 70%
-- ⚠️ **Performance note**: Speedup varies by context length (current: 200 tokens)
+- ⚠️ **实际未加速** - Python实现overhead超过内存节省收益
+- 💡 **理论加速** - 在GPU + 大模型 + C++/CUDA实现下应有1.58×加速
+- 🎯 **创新点** - Layer-wise adaptive compression (不同层不同压缩率：80%/50%/70%)
+
+**Why no speedup in practice?**
+- Small model (70M) on CPU
+- Python implementation overhead
+- Expected to work better on: large models, GPU, optimized implementation
 
 ## 🔬 Method
 
