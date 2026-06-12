@@ -1,7 +1,8 @@
 \documentclass{article}
 
-% Self-contained article style.  Use the NeurIPS style on Overleaf if required.
-\usepackage[margin=1in]{geometry}
+% NeurIPS/NIPS style template.  nonatbib keeps the file compilable in minimal
+% local LaTeX installs while preserving the NeurIPS layout.
+\usepackage[final,nonatbib,main]{neurips_2025}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{hyperref}
@@ -9,13 +10,13 @@
 \usepackage{booktabs}
 \usepackage{amsmath}
 \usepackage{amsfonts}
+\hypersetup{hidelinks}
 
 \title{Layer-wise Adaptive KV Cache Compression \\ for Efficient LLM Inference}
 
 \author{
-  Your Name \\
-  Your University \\
-  \texttt{your.email@university.edu} \\
+  Fu Ruoyu \\
+  Shanghai Jiao Tong University \\
 }
 
 \begin{document}
