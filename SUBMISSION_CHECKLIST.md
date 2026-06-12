@@ -10,6 +10,8 @@
 - [x] Latest metrics saved to `results.json`
 - [x] README updated with real command and real results
 - [x] `paper.tex` updated to match the implementation
+- [x] `paper.tex` uses the NeurIPS 2025 submission template
+- [x] `paper.pdf` compiled with line numbers and anonymous submission header
 
 ## Verification Commands
 
@@ -34,10 +36,9 @@ Verified locally:
 
 ## Before Submission
 
-- [ ] Replace `Your Name`, `Your University`, and email in `paper.tex`
-- [ ] Add the final GitHub repository link in the report if required
-- [ ] Compile `paper.tex` to PDF
-- [ ] Push the repository to GitHub
+- [ ] Add the final GitHub repository link in the report if required by the course
+- [x] Compile `paper.tex` to PDF
+- [x] Push the repository to GitHub
 
 ## Suggested Submission Statement
 

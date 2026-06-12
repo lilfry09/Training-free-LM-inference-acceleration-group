@@ -46,8 +46,9 @@ Core files:
 - `layerwise_compression.py`: reusable compression utilities and generation loop
 - `eval_quick.py`: real local-model evaluation script
 - `test_layerwise_compression.py`: unit tests for ratio scheduling and KV slicing
-- `paper.tex`: report draft using the bundled `neurips_2025.sty` template
-- `paper.pdf`: compiled 4-page NeurIPS-style report
+- `paper.tex`: report draft using the bundled NeurIPS 2025 submission template
+- `neurips_2025.sty`, `lineno.sty`, `natbib.sty`: local template/style files needed for compilation
+- `paper.pdf`: compiled 4-page NeurIPS submission-style report with line numbers
 
 ## Latest Results
 
