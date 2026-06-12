@@ -1,49 +1,53 @@
 # Submission Checklist
 
-## Completed
+## Assignment Mapping
 
-- [x] Real layer-wise KV cache compressor in `layerwise_compression.py`
-- [x] Main reproducible evaluation script in `eval_quick.py`
-- [x] Local model loading from `..\finalproj\models\pythia-70m`
-- [x] PG-19 sample evaluation from `..\finalproj\datasets\pg19_samples\test_1.txt`
-- [x] Unit tests in `test_layerwise_compression.py`
-- [x] Latest metrics saved to `results.json`
-- [x] README updated with real command and real results
-- [x] `paper.tex` updated to match the implementation
-- [x] `paper.tex` uses the NeurIPS 2025 submission template
-- [x] `paper.pdf` compiled with line numbers and anonymous submission header
+- [x] Group part focuses on integrating a series of training-free inference
+  acceleration methods.
+- [x] Baseline model is Pythia-70M.
+- [x] No model training or weight updates are used.
+- [x] Evaluation includes WikiText and PG-19.
+- [x] Metrics include PPL, TTFT, TPOT, throughput, and approximate KV cache
+  memory.
+- [x] Report is in English and uses the provided NeurIPS 2025 template.
+- [x] Report includes abstract, introduction, methods, and experiments.
+- [x] Body is kept within the 4-page course limit.
+- [x] Code link is included in the paper.
+- [x] Group division of labor/workload is included in the paper and README.
+
+## Implemented Components
+
+- [x] `src/evaluate.py`: baseline, GQA, and KVPress evaluation.
+- [x] `src/methods.py`: reduced-KV grouped attention implementation.
+- [x] `src/kvpress_adapter.py`: KVPress hook adapter for GPT-NeoX/Pythia.
+- [x] `scripts/run_matrix.ps1`: full group experiment matrix.
+- [x] `scripts/run_ablations.ps1`: KVPress ratio and GQA sanity diagnostics.
+- [x] `layerwise_compression.py`: additional layer-wise KV compression prototype.
+- [x] `eval_quick.py`: quick PG-19/WikiText evaluation for the layer-wise
+  prototype.
 
 ## Verification Commands
 
 ```powershell
+python -m py_compile eval_quick.py layerwise_compression.py test_layerwise_compression.py
 python -m pytest -q
-python eval_quick.py
+pdflatex -interaction=nonstopmode paper.tex
+pdflatex -interaction=nonstopmode paper.tex
 ```
 
 Verified locally:
 
 - `pytest`: 4 passed
-- `eval_quick.py`: completed and wrote `results.json`
+- `eval_quick.py --dataset pg19`: wrote `results_pg19.json`
+- `eval_quick.py --dataset wikitext`: wrote `results_wikitext.json`
 
-## Latest Main Result
+## Key Result Files
 
-| Method | PPL | Time (s) | Speedup | Cache reduction |
-|---|---:|---:|---:|---:|
-| Dense | 37.5041 | 0.6647 | 1.0000x | 0.0% |
-| Uniform-50% | 38.4568 | 1.8157 | 0.3661x | 43.0% |
-| Uniform-67% | 36.0841 | 0.6518 | 1.0198x | 27.8% |
-| LayerWise-80/50/70 | 39.2461 | 0.5826 | 1.1410x | 28.4% |
-
-## Before Submission
-
-- [ ] Add the final GitHub repository link in the report if required by the course
-- [x] Compile `paper.tex` to PDF
-- [x] Push the repository to GitHub
-
-## Suggested Submission Statement
-
-This project implements a training-free layer-wise KV cache compression method
-for Pythia-70M.  The submitted results are produced by `python eval_quick.py`
-using a local Pythia-70M checkpoint and a PG-19 sample.  The implementation
-compresses the KV cache after prompt prefill and evaluates cached continuation
-PPL plus greedy decoding speed.
+- `outputs/comparison_quality.md`
+- `outputs/comparison_speed.md`
+- `outputs/comparison_memory.md`
+- `outputs/comparison_kvpress_ablation.md`
+- `outputs/comparison_gqa_sanity.md`
+- `results_pg19.json`
+- `results_wikitext.json`
+- `paper.pdf`

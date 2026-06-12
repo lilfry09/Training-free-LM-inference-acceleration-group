@@ -1,0 +1,59 @@
+{
+  "model_path": "D:\\SJTUlearning\\2026Spring\\NLP\\FinalProject\\finalproj\\models\\pythia-70m",
+  "dataset": "wikitext",
+  "text_source": "D:\\SJTUlearning\\2026Spring\\NLP\\FinalProject\\finalproj\\datasets\\wikitext-103-raw-v1\\test",
+  "device": "cpu",
+  "dtype": "torch.float32",
+  "ppl_tokens": 160,
+  "prompt_tokens": 96,
+  "max_new_tokens": 32,
+  "repeats": 2,
+  "min_cache_tokens": 16,
+  "keep_initial_tokens": 4,
+  "results": [
+    {
+      "method": "Dense",
+      "ppl": 80.3623,
+      "generation_time_sec": 1.8949,
+      "tokens_per_sec": 16.8877,
+      "speedup": 1.0,
+      "avg_cache_tokens_per_layer": 111.5,
+      "ppl_final_cache_tokens_per_layer": 159.0,
+      "cache_reduction": 0.0,
+      "ppl_scored_tokens": 64
+    },
+    {
+      "method": "Uniform-50%",
+      "ppl": 84.9748,
+      "generation_time_sec": 1.0669,
+      "tokens_per_sec": 29.9947,
+      "speedup": 1.7762,
+      "avg_cache_tokens_per_layer": 63.5,
+      "ppl_final_cache_tokens_per_layer": 111.0,
+      "cache_reduction": 0.4305,
+      "ppl_scored_tokens": 64
+    },
+    {
+      "method": "Uniform-67%",
+      "ppl": 84.5213,
+      "generation_time_sec": 0.9792,
+      "tokens_per_sec": 32.6795,
+      "speedup": 1.9351,
+      "avg_cache_tokens_per_layer": 80.5,
+      "ppl_final_cache_tokens_per_layer": 128.0,
+      "cache_reduction": 0.278,
+      "ppl_scored_tokens": 64
+    },
+    {
+      "method": "LayerWise-80/50/70",
+      "ppl": 82.2982,
+      "generation_time_sec": 0.8789,
+      "tokens_per_sec": 36.4097,
+      "speedup": 2.156,
+      "avg_cache_tokens_per_layer": 79.8333,
+      "ppl_final_cache_tokens_per_layer": 127.3333,
+      "cache_reduction": 0.284,
+      "ppl_scored_tokens": 64
+    }
+  ]
+}

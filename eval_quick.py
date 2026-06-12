@@ -22,13 +22,16 @@ from layerwise_compression import (
 PROJECT_DIR = Path(__file__).resolve().parent
 DEFAULT_MODEL_PATH = PROJECT_DIR.parent / "finalproj" / "models" / "pythia-70m"
 DEFAULT_TEXT_PATH = PROJECT_DIR.parent / "finalproj" / "datasets" / "pg19_samples" / "test_1.txt"
+DEFAULT_WIKITEXT_PATH = PROJECT_DIR.parent / "finalproj" / "datasets" / "wikitext-103-raw-v1" / "test"
 DEFAULT_OUTPUT = PROJECT_DIR / "results.json"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate layer-wise KV cache compression.")
     parser.add_argument("--model_path", type=Path, default=DEFAULT_MODEL_PATH)
+    parser.add_argument("--dataset", choices=["pg19", "wikitext", "custom"], default="pg19")
     parser.add_argument("--text_path", type=Path, default=DEFAULT_TEXT_PATH)
+    parser.add_argument("--wikitext_path", type=Path, default=DEFAULT_WIKITEXT_PATH)
     parser.add_argument("--output_json", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument("--dtype", choices=["float32", "float16", "bfloat16"], default="float32")
@@ -62,10 +65,7 @@ def sync_if_needed(device: str) -> None:
         torch.cuda.synchronize()
 
 
-def sample_text(text_path: Path) -> str:
-    if text_path.exists():
-        return text_path.read_text(encoding="utf-8", errors="ignore")
-
+def fallback_text() -> str:
     return (
         "Natural language processing systems often need to process long contexts. "
         "During autoregressive decoding, transformer models cache keys and values "
@@ -75,6 +75,36 @@ def sample_text(text_path: Path) -> str:
         "context in shallow layers, compresses middle layers aggressively, and keeps "
         "a moderate amount of context in deep layers. "
     ) * 8
+
+
+def load_wikitext_text(dataset_path: Path) -> str:
+    if not dataset_path.exists():
+        raise FileNotFoundError(f"WikiText dataset path not found: {dataset_path}")
+    try:
+        from datasets import load_from_disk
+    except ImportError as exc:
+        raise RuntimeError("Install datasets>=2.14.0 to read local WikiText data.") from exc
+
+    ds = load_from_disk(str(dataset_path))
+    lines = [row["text"] for row in ds if row.get("text") and row["text"].strip()]
+    if not lines:
+        raise RuntimeError(f"No non-empty WikiText rows found in {dataset_path}")
+    return "\n".join(lines)
+
+
+def sample_text(args: argparse.Namespace) -> tuple[str, str]:
+    if args.dataset == "pg19":
+        if args.text_path.exists():
+            return args.text_path.read_text(encoding="utf-8", errors="ignore"), str(args.text_path.resolve())
+        return fallback_text(), "built-in fallback"
+
+    if args.dataset == "wikitext":
+        return load_wikitext_text(args.wikitext_path.resolve()), str(args.wikitext_path.resolve())
+
+    if args.text_path.exists():
+        return args.text_path.read_text(encoding="utf-8", errors="ignore"), str(args.text_path.resolve())
+
+    return fallback_text(), "built-in fallback"
 
 
 def load_model_and_tokenizer(model_path: Path, device: str, dtype: torch.dtype):
@@ -225,11 +255,13 @@ def main() -> list[dict[str, object]]:
     print("Layer-wise Adaptive KV Cache Compression - Quick Real Evaluation")
     print("=" * 72)
     print(f"Model: {args.model_path}")
-    print(f"Text: {args.text_path if args.text_path.exists() else 'built-in fallback'}")
+    text, text_source = sample_text(args)
+    print(f"Dataset: {args.dataset}")
+    print(f"Text: {text_source}")
     print(f"Device: {device}, dtype: {dtype}")
 
     model, tokenizer = load_model_and_tokenizer(args.model_path.resolve(), device, dtype)
-    encoded = tokenizer(sample_text(args.text_path.resolve()), return_tensors="pt", truncation=False)
+    encoded = tokenizer(text, return_tensors="pt", truncation=False)
     token_ids = encoded["input_ids"].to(device)
     if token_ids.shape[1] < max(args.ppl_tokens, args.prompt_tokens) + 1:
         raise RuntimeError("Sample text produced too few tokens for the requested evaluation.")
@@ -339,6 +371,8 @@ def main() -> list[dict[str, object]]:
 
     payload = {
         "model_path": str(args.model_path.resolve()),
+        "dataset": args.dataset,
+        "text_source": text_source,
         "device": device,
         "dtype": str(dtype),
         "ppl_tokens": args.ppl_tokens,

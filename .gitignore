@@ -1,0 +1,16 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+
+models/
+datasets/
+data/
+
+paper.aux
+paper.log
+paper.out
+paper.toc
+paper.bbl
+paper.blg
+
+tmp/

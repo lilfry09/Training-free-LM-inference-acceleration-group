@@ -1,7 +1,5 @@
 \documentclass{article}
 
-% NeurIPS/NIPS submission style. This follows the provided
-% NeurIPS模板/neurips_2025.tex shell.
 \usepackage{neurips_2025}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -10,9 +8,8 @@
 \usepackage{booktabs}
 \usepackage{amsmath}
 \usepackage{amsfonts}
-\usepackage{xcolor}
 
-\title{Layer-wise Adaptive KV Cache Compression \\ for Efficient LLM Inference}
+\title{Training-Free Inference Acceleration for Pythia-70M: GQA, KVPress, and Layer-wise KV Compression}
 
 \author{
   Fu Ruoyu \\
@@ -20,213 +17,228 @@
 }
 
 \begin{document}
-
+\hypersetup{hidelinks}
 \maketitle
 
 \begin{abstract}
-Large language models (LLMs) face significant memory bottlenecks during inference due to the key-value (KV) cache, which grows linearly with sequence length. Many simple compression baselines apply a uniform keep ratio across all layers, ignoring the heterogeneous characteristics of transformer blocks. We implement a training-free, layer-wise adaptive KV cache compression method that assigns different keep ratios based on layer positions: shallow layers preserve more cache for semantic encoding (80\%), middle layers use aggressive compression (50\%), and deep layers maintain moderate cache for decision-making (70\%). On a local CPU quick evaluation with Pythia-70M and a PG-19 sample, our implementation reduces average cache tokens by 28.4\% and reaches 1.14× generation speedup, with cached continuation PPL increasing from 37.50 to 39.25. The method is simple, reproducible, and immediately applicable without model retraining.
+Autoregressive language-model inference is limited by attention cost and by the
+key-value (KV) cache, which grows linearly with context length.  This group
+project implements and evaluates several training-free acceleration strategies
+for Pythia-70M: a baseline SDPA runner, a reduced-KV grouped-query attention
+(GQA) conversion, KVPress-Knorm, KVPress-StreamingLLM, and an additional
+layer-wise sink-plus-recent KV compression prototype.  We evaluate WikiText-103
+and one PG-19 test sample using chunked perplexity, cached continuation
+perplexity, TTFT, TPOT, throughput, and approximate KV-cache memory.  The main
+finding is deliberately conservative: KV cache compression can improve CPU
+throughput in selected settings, while naive training-free GQA reduces memory
+but severely damages quality.  The code is available at
+\url{https://github.com/lilfry09/Training-free-LM-inference-acceleration-group/tree/layerwise-compression}.
 \end{abstract}
 
 \section{Introduction}
 
-The deployment of large language models (LLMs) in production environments is increasingly constrained by memory requirements during autoregressive generation. The key-value (KV) cache, which stores attention keys and values from previous tokens, grows linearly with sequence length and batch size, often exceeding GPU memory capacity~\cite{pope2022efficiently}. This memory bottleneck limits the maximum sequence length and batch size, reducing inference throughput.
+The KV cache is essential for fast autoregressive decoding because each new
+token can reuse keys and values from previous tokens.  However, this cache also
+creates a memory and attention bottleneck: for a model with $N$ layers, context
+length $L$, KV heads $H_{kv}$, and head dimension $d$, the cache is proportional
+to $2NLH_{kv}d$.  The course assignment asks for training-free acceleration on
+Pythia-70M, so the central question is not whether we can train a better
+architecture, but which drop-in modifications remain honest and reproducible.
 
-Recent work has explored various KV cache compression techniques, including eviction-based methods~\cite{zhang2024h2o}, quantization~\cite{hooper2024kvquant}, and dynamic selection~\cite{li2024snapkv}. However, these approaches typically apply a \textbf{uniform compression ratio} across all transformer layers, treating each layer identically. This one-size-fits-all strategy is suboptimal because different layers exhibit distinct attention patterns and serve different functions in the model hierarchy.
+We integrate methods from two families.  First, reduced-KV GQA stores fewer
+cached key/value heads, inspired by uptrained GQA models~\citep{ainslie2023gqa}.
+Second, KV-cache compression removes token positions from the sequence
+dimension, following the StreamingLLM attention-sink idea~\citep{xiao2023streamingllm}
+and the KVPress implementation~\citep{kvpress2024}.  We also implement a simple
+layer-wise schedule that keeps more cache in shallow layers, compresses middle
+layers aggressively, and keeps a moderate budget in deep layers.
 
-\textbf{Our key insight:} Shallow layers encode semantic information and benefit from larger caches, while middle layers learn abstract representations that are robust to compression, and deep layers perform final reasoning requiring moderate cache sizes. We propose a training-free, layer-wise adaptive compression strategy that exploits these heterogeneous characteristics.
+Our contributions are: (1) a reproducible Pythia-70M evaluation framework for
+baseline, GQA, KVPress-Knorm, KVPress-StreamingLLM, and layer-wise compression;
+(2) quality, speed, and memory measurements on WikiText and PG-19; and (3)
+negative-result analysis showing that training-free reduced-KV GQA is not a
+reliable accelerator for a pretrained MHA checkpoint.
 
-\textbf{Contributions:}
-\begin{itemize}
-    \item We identify and empirically validate the layer-wise heterogeneity in KV cache importance.
-    \item We propose a simple yet effective layer-wise adaptive compression framework requiring no training or fine-tuning.
-    \item We provide a reproducible local evaluation on Pythia-70M using cached continuation PPL and greedy decoding speed.
-\end{itemize}
+\section{Methods}
 
-\section{Related Work}
+\paragraph{Baseline.}
+The baseline loads the local EleutherAI Pythia-70M checkpoint through Hugging
+Face Transformers and uses scaled dot-product attention.  Model parameters are
+never changed.
 
-\textbf{KV Cache Optimization.}
-H2O~\cite{zhang2024h2o} selects tokens based on cumulative attention scores. SnapKV~\cite{li2024snapkv} identifies important cache entries before generation. PyramidKV~\cite{cai2024pyramidkv} uses hierarchical compression but still applies layer-specific fixed budgets. RocketKV~\cite{tang2025rocketkv} achieves 400× compression through two-stage coarse-to-fine eviction. Unlike these methods, we focus on the \textit{layer-wise heterogeneity} dimension.
+\paragraph{Reduced-KV GQA.}
+Pythia-70M has 8 attention heads.  Our GQA variant computes the original query,
+key, and value states, averages key/value heads into 2 cached KV heads, stores
+the reduced tensors in the dynamic cache, and evaluates grouped attention with
+PyTorch SDPA.  This is a training-free conversion, not the uptraining recipe of
+\citet{ainslie2023gqa}; therefore we treat it as a stress test and include a KV
+head sanity check.
 
-\textbf{Attention Analysis.}
-Recent studies~\cite{voita2019analyzing, clark2019does} reveal that different attention heads and layers serve distinct roles. Our work extends this by showing that compression ratios should also be layer-dependent.
+\paragraph{KVPress compression.}
+We evaluate KVPress-Knorm and KVPress-StreamingLLM at removal ratio 0.5.
+Knorm keeps cache entries with larger key-norm scores.  StreamingLLM keeps sink
+tokens and recent tokens.  Compression is applied after prefill through
+GPT-NeoX attention hooks, and the code records per-layer before/after cache
+lengths.
 
-\section{Method}
-
-\subsection{Preliminary: KV Cache Mechanism}
-
-In transformer-based LLMs, each decoder layer computes attention as:
-\begin{equation}
-\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
-\end{equation}
-
-During autoregressive generation, keys $K$ and values $V$ from previous tokens are cached to avoid recomputation. For a sequence of length $L$ with $N$ layers and $d$ dimensions, the KV cache memory is $O(2 \cdot N \cdot L \cdot d)$.
-
-\subsection{Layer-wise Compression Ratios}
-
-We categorize layers into three groups based on their position in the network:
-
-\begin{itemize}
-    \item \textbf{Shallow layers} ($0$-$30\%$): Encode low-level semantics and token-level information. Compression ratio: $\rho_s = 0.8$
-    \item \textbf{Middle layers} ($30\%$-$70\%$): Learn abstract representations robust to information loss. Compression ratio: $\rho_m = 0.5$
-    \item \textbf{Deep layers} ($70\%$-$100\%$): Perform reasoning and decision-making. Compression ratio: $\rho_d = 0.7$
-\end{itemize}
-
-For layer $l \in [0, N-1]$, the compression ratio is:
-\begin{equation}
-\rho(l) = \begin{cases}
-\rho_s & \text{if } l < 0.3N \\
-\rho_m & \text{if } 0.3N \leq l < 0.7N \\
-\rho_d & \text{otherwise}
-\end{cases}
-\end{equation}
-
-\subsection{Token Selection Strategy}
-
-Given the keep ratio $\rho(l)$ for layer $l$, we keep $k = \lceil \rho(l) \cdot L \rceil$ cache positions. Our implementation uses a simple sink-plus-recent policy: keep a small prefix of sink tokens and keep the most recent tokens for the remaining budget. This avoids using model gradients or fine-tuning and keeps the method compatible with standard HuggingFace causal language models.
-
-\paragraph{Algorithm.}
-Given layer index $l$, total layers $N$, and KV cache $(K,V)$:
-\begin{enumerate}
-    \item Compute $\rho \leftarrow \text{GetRatio}(l,N)$.
-    \item Let $L$ be the cache length and $k \leftarrow \max(k_{\min}, \lceil \rho L \rceil)$.
-    \item Select prefix-and-recent indices with budget $k$.
-    \item Return $K' = K[\text{indices}]$ and $V' = V[\text{indices}]$.
-\end{enumerate}
-
-\subsection{Complexity Analysis}
-
-Our method adds little algorithmic overhead: token indices are deterministic and slicing is linear in the kept cache size. In the current prototype we compress once after prompt prefill, then append generated tokens normally during decoding. This avoids repeated compounding of the compression ratio.
+\paragraph{Layer-wise prototype.}
+The additional prototype uses a deterministic sink-plus-recent selector with
+layer-specific keep ratios: shallow layers keep 80\%, middle layers keep 50\%,
+and deep layers keep 70\%.  It compresses once after prompt prefill and then
+continues greedy decoding with the compressed cache.
 
 \section{Experiments}
 
-\subsection{Experimental Setup}
+\paragraph{Setup and metrics.}
+All experiments use Pythia-70M, no training, CPU inference, and greedy decoding.
+WikiText uses the first 4096 tokens from the test split.  PG-19 uses the first
+test example and takes the first 4096 Pythia tokens.  Chunked PPL resets context
+every 512 tokens and is used for baseline/GQA quality.  Cached PPL prefills 512
+tokens, optionally compresses the cache, and scores the next 256 true tokens one
+by one.  Speed uses 128, 512, and 1024 prompt tokens, one warm-up, three measured
+runs, and 64 generated tokens.  We report TTFT, TPOT, throughput, and approximate
+KV memory.  The main reproduction command is \texttt{.\textbackslash scripts\textbackslash run\_matrix.ps1}.
 
-\textbf{Model:} We use Pythia-70M~\cite{biderman2023pythia} as required, a GPT-NeoX-based model with 6 layers.
-
-\textbf{Dataset sample:} We evaluate on the local PG-19 test sample prepared in the sibling course project directory.
-
-\textbf{Metrics:} We report cached continuation perplexity (PPL), greedy decoding time, tokens per second, speedup, and average KV cache reduction.
-
-\textbf{Baselines:}
-\begin{itemize}
-    \item \textbf{Dense}: No compression (full KV cache)
-    \item \textbf{Uniform-50\%}: Uniform 50\% compression across all layers
-    \item \textbf{Uniform-67\%}: Uniform keep ratio matching the approximate average keep ratio of our layer-wise schedule
-\end{itemize}
-
-\subsection{Main Results}
-
-Table~\ref{tab:main} shows our CPU quick evaluation. The layer-wise method reaches \textbf{1.14× speedup} and reduces average cache tokens by \textbf{28.4\%}. Its PPL is slightly worse than the dense baseline, showing the expected quality--efficiency trade-off.
-
-\begin{table}[h]
+\begin{center}
 \centering
-\caption{Quick PG-19 sample results with Pythia-70M on CPU.}
-\label{tab:main}
-\begin{tabular}{lcccc}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\noindent\textbf{Table 1:} Quality on WikiText and PG-19.  KVPress affects
+cached PPL, not chunked PPL, because compression is applied to generation caches.
+
+\begin{tabular}{llrrrr}
 \toprule
-Method & PPL $\downarrow$ & Time (s) $\downarrow$ & Speedup & Cache reduction \\
+Dataset & Method & Chunked PPL & Cached PPL & KV events & Removed \\
 \midrule
-Dense & 37.50 & 0.6647 & 1.00× & 0.0\% \\
-Uniform-50\% & 38.46 & 1.8157 & 0.37× & 43.0\% \\
-Uniform-67\% & 36.08 & 0.6518 & 1.02× & 27.8\% \\
-\textbf{Ours (LayerWise)} & \textbf{39.25} & \textbf{0.5826} & \textbf{1.14×} & \textbf{28.4\%} \\
+WikiText & Baseline & 63.72 & 13.09 & 0 & -- \\
+WikiText & GQA-2KV & 2258.01 & 3659.00 & 0 & -- \\
+WikiText & Knorm-0.5 & 63.72 & 52.44 & 78 & 0.50 \\
+WikiText & Stream-0.5 & 63.72 & 61.30 & 78 & 0.50 \\
+PG-19 & Baseline & 33.57 & 29.60 & 0 & -- \\
+PG-19 & GQA-2KV & 816.70 & 776.88 & 0 & -- \\
+PG-19 & Knorm-0.5 & 33.57 & 31.76 & 78 & 0.50 \\
+PG-19 & Stream-0.5 & 33.57 & 29.49 & 78 & 0.50 \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{center}
 
-\subsection{Ablation Study}
+Table 1 shows the key quality result.  GQA-2KV is a clear
+negative result: reducing 8 KV heads to 2 by averaging severely breaks the
+learned attention geometry.  KVPress has a more useful trade-off.  On PG-19,
+StreamingLLM-0.5 preserves cached PPL nearly exactly (29.60 to 29.49), while
+Knorm degrades it mildly.  On WikiText, both KVPress variants hurt cached PPL,
+which shows that compression quality depends on the text slice and selector.
 
-We include a small ratio comparison in Table~\ref{tab:ablation}. Because CPU timing is noisy and the test is intentionally quick, these numbers should be interpreted as preliminary evidence rather than a definitive benchmark.
-
-\begin{table}[h]
+\begin{center}
 \centering
-\caption{Ablation study on layer ratio configurations.}
-\label{tab:ablation}
-\begin{tabular}{lccc}
+\small
+\setlength{\tabcolsep}{4pt}
+\noindent\textbf{Table 2:} Selected throughput results.  Values are generated
+tokens/s; relative change compares the best compressed method to the baseline at
+the same context.
+
+\begin{tabular}{llrrrl}
 \toprule
-Configuration & PPL $\downarrow$ & Speedup & Avg. keep ratio \\
+Dataset & Ctx & Baseline & Best compressed & Rel. & Method \\
 \midrule
-Dense & 37.50 & 1.00× & 1.00 \\
-Uniform-50\% & 38.46 & 0.37× & 0.50 \\
-Uniform-67\% & 36.08 & 1.02× & 0.67 \\
-\textbf{(80/50/70)} & \textbf{39.25} & \textbf{1.14×} & \textbf{0.67} \\
+WikiText & 128 & 50.87 & 68.83 & +35.3\% & Stream \\
+WikiText & 512 & 34.95 & 52.54 & +50.3\% & Stream \\
+WikiText & 1024 & 51.24 & 43.89 & -14.3\% & Knorm \\
+PG-19 & 128 & 74.31 & 66.41 & -10.6\% & Stream \\
+PG-19 & 512 & 60.64 & 58.85 & -3.0\% & Stream \\
+PG-19 & 1024 & 47.32 & 51.44 & +8.7\% & Stream \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{center}
 
-\subsection{Analysis}
+Table 2 summarizes speed rather than hiding the mixed outcome.
+KVPress-StreamingLLM improves WikiText throughput at 128 and 512 tokens, and
+PG-19 throughput at 1024 tokens, but not every setting improves.  CPU overhead
+from hooks, indexing, and cache updates can dominate at some lengths; therefore
+we report raw TTFT/TPOT/throughput tables in \texttt{outputs/comparison\_speed.md}
+and avoid claiming universal acceleration.
 
-\textbf{Why does layer-wise compression work?}
-We hypothesize that shallow layers learn token-level features requiring dense context, while middle layers learn abstract patterns robust to sparsification. Deep layers need sufficient context for final predictions but fewer tokens than shallow layers.
+\begin{center}
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\noindent\textbf{Table 3:} Diagnostics on WikiText with a 512-token prompt.
+Cache MB is the approximate float32 per-sequence KV cache size.
 
-The current result supports a conservative conclusion: layer-wise compression is easy to implement and can reduce cache size, but the best speed--quality point depends on the text, context length, and CPU timing variance. Future work should replace the sink-plus-recent selector with attention- or norm-based token importance.
+\begin{tabular}{llrrr}
+\toprule
+Ablation & Setting & Cache MB & Chunked PPL & Cached PPL \\
+\midrule
+GQA & 8 KV heads & 12.0 & 63.72 & 13.09 \\
+GQA & 4 KV heads & 6.0 & 1240.55 & 1976.45 \\
+GQA & 2 KV heads & 3.0 & 2258.01 & 3659.00 \\
+Stream & ratio 0.25 & 9.0 & 63.72 & 22.92 \\
+Stream & ratio 0.50 & 6.0 & 63.72 & 61.30 \\
+Stream & ratio 0.75 & 3.0 & 63.72 & 62.61 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The diagnostics in Table 3 support two claims.  First, the
+GQA path is numerically sane at 8 KV heads, then collapses as heads are reduced;
+the failure is the training-free conversion itself, not the grouped-attention
+implementation.  Second, stronger StreamingLLM compression reduces memory but
+can worsen cached PPL.  The layer-wise prototype further tests a heterogeneous
+budget: on a quick WikiText run it reduces cache by 28.4\% and improves
+throughput from 16.89 to 36.41 tokens/s with PPL 80.36 to 82.30; on PG-19 it
+keeps the same cache reduction but slows down, again reinforcing that CPU speed
+depends on workload and overhead.
+
+\paragraph{Group contribution statement.}
+Current submitted workload: Fu Ruoyu implemented the method integration,
+reduced-KV GQA path, KVPress adapter, layer-wise compression prototype,
+experiment scripts, analysis, README, and report.  Workload: 100\%.
 
 \section{Conclusion}
 
-We presented a training-free, layer-wise adaptive KV cache compression method that exploits the heterogeneous characteristics of transformer layers. Our prototype assigns different keep ratios to shallow, middle, and deep layers and demonstrates real KV cache reduction with a modest speedup in a local CPU quick evaluation.
+This study finds that not every training-free memory reduction is a valid
+accelerator.  Naive reduced-KV GQA saves cache memory but breaks Pythia-70M
+quality.  KVPress-style token compression is more promising and sometimes
+improves throughput, but its benefit is sensitive to dataset, context length,
+and implementation overhead.  The best-supported conclusion is therefore an
+honest engineering one: KV cache compression is worth evaluating carefully under
+the target inference stack, while untrained architectural conversion should be
+treated as a negative baseline unless quality is repaired.
 
-\textbf{Limitations:} We only evaluated on Pythia-70M due to computational constraints. Larger models may exhibit different layer characteristics requiring adjusted ratios.
+{\small
+\begin{thebibliography}{9}
 
-\textbf{Future work:} (1) Extend to larger models; (2) Learn optimal ratios via reinforcement learning; (3) Combine with other orthogonal techniques like quantization.
+\bibitem[Ainslie et~al.(2023)]{ainslie2023gqa}
+Ainslie, J., Lee-Thorp, J., de~Jong, M., Zemlyanskiy, Y., Lebron, F., and Sanghai, S.
+\newblock GQA: Training generalized multi-query transformer models from multi-head checkpoints.
+\newblock \emph{EMNLP}, 2023.
 
-\bibliographystyle{plain}
-\begin{thebibliography}{10}
+\bibitem[Biderman et~al.(2023)]{biderman2023pythia}
+Biderman, S., Schoelkopf, H., Anthony, Q., Bradley, H., O'Brien, K., Hallahan, E., and others.
+\newblock Pythia: A suite for analyzing large language models across training and scaling.
+\newblock \emph{ICML}, 2023.
 
-\bibitem{pope2022efficiently}
-R.~Pope, S.~Douglas, A.~Chowdhery, et al.
-\newblock Efficiently scaling transformer inference.
-\newblock \textit{MLSys}, 2023.
-
-\bibitem{zhang2024h2o}
-Z.~Zhang, Y.~Sheng, T.~Zhou, et al.
-\newblock H$_2$O: Heavy-hitter oracle for efficient generative inference of large language models.
-\newblock \textit{NeurIPS}, 2024.
-
-\bibitem{li2024snapkv}
-Y.~Li, Y.~Du, Z.~Zhou, et al.
-\newblock SnapKV: LLM knows what you are looking for before generation.
-\newblock \textit{arXiv:2404.14469}, 2024.
-
-\bibitem{cai2024pyramidkv}
-Z.~Cai, Y.~Zhang, Z.~Gao, et al.
-\newblock PyramidKV: Dynamic KV cache compression based on pyramidal information funneling.
-\newblock \textit{arXiv:2406.02069}, 2024.
-
-\bibitem{tang2025rocketkv}
-J.~Tang, Y.~Song, K.~Xue, et al.
-\newblock RocketKV: Accelerating long-context LLM inference via two-stage KV cache compression.
-\newblock \textit{ICML}, 2025.
-
-\bibitem{hooper2024kvquant}
-C.~Hooper, S.~Kim, H.~Mohammadzadeh, et al.
-\newblock KVQuant: Towards 10 million context length LLM inference with KV cache quantization.
-\newblock \textit{arXiv:2401.18079}, 2024.
-
-\bibitem{voita2019analyzing}
-E.~Voita, D.~Talbot, F.~Moiseev, et al.
-\newblock Analyzing multi-head self-attention: Specialized heads do the heavy lifting, the rest can be pruned.
-\newblock \textit{ACL}, 2019.
-
-\bibitem{clark2019does}
-K.~Clark, U.~Khandelwal, O.~Levy, et al.
-\newblock What does BERT look at? An analysis of BERT's attention.
-\newblock \textit{BlackboxNLP Workshop}, 2019.
-
-\bibitem{biderman2023pythia}
-S.~Biderman, H.~Schoelkopf, Q.~Anthony, et al.
-\newblock Pythia: A suite for analyzing large language models.
-\newblock \textit{ICML}, 2023.
-
-\bibitem{merity2016pointer}
-S.~Merity, C.~Xiong, J.~Bradbury, et al.
+\bibitem[Merity et~al.(2016)]{merity2016wikitext}
+Merity, S., Xiong, C., Bradbury, J., and Socher, R.
 \newblock Pointer sentinel mixture models.
-\newblock \textit{ICLR}, 2017.
+\newblock arXiv:1609.07843, 2016.
 
-\bibitem{raecompressive}
-J.~W. Rae, A.~Potapenko, S.~M. Jayakumar, et al.
+\bibitem[NVIDIA(2024)]{kvpress2024}
+NVIDIA.
+\newblock KVPress: KV cache compression for efficient LLM inference.
+\newblock \url{https://github.com/NVIDIA/kvpress}, 2024.
+
+\bibitem[Rae et~al.(2020)]{rae2020compressive}
+Rae, J.~W., Potapenko, A., Jayakumar, S.~M., and Lillicrap, T.~P.
 \newblock Compressive transformers for long-range sequence modelling.
-\newblock \textit{ICLR}, 2020.
+\newblock \emph{ICLR}, 2020.
+
+\bibitem[Xiao et~al.(2023)]{xiao2023streamingllm}
+Xiao, G., Tian, Y., Chen, B., Han, S., and Lewis, M.
+\newblock Efficient streaming language models with attention sinks.
+\newblock arXiv:2309.17453, 2023.
 
 \end{thebibliography}
+}
 
 \end{document}

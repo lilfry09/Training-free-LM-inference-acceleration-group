@@ -1,0 +1,171 @@
+{
+  "mode": "baseline",
+  "dataset": "wikitext",
+  "split": "test",
+  "device": "cpu",
+  "dtype": "float32",
+  "attn_implementation": "sdpa",
+  "gqa_impl": null,
+  "gqa_num_heads": null,
+  "gqa_kv_heads": null,
+  "gqa_kv_head_ratio": null,
+  "kvpress_method": null,
+  "kvpress_compression_ratio": null,
+  "kvpress_n_sink": null,
+  "ppl_metrics": {
+    "ppl": 63.718854139590285,
+    "nll_sum": 17012.59765625,
+    "tokens": 4095
+  },
+  "cache_ppl_metrics": {
+    "ppl": 13.088739039473024,
+    "nll_sum": 658.36857477596,
+    "tokens": 256,
+    "context_len": 512,
+    "requested_eval_tokens": 256
+  },
+  "speed_metrics": [
+    {
+      "context_len": 128,
+      "speed_repeats": 3,
+      "speed_warmup_runs": 1,
+      "raw_runs": [
+        {
+          "ttft_sec": 0.07880320000003849,
+          "tpot_sec": 0.014843498412696972,
+          "decode_sec": 0.9351403999999093,
+          "e2e_sec": 1.0139447000001383,
+          "throughput_tok_per_sec": 63.11981314167456,
+          "generated_tokens": 64
+        },
+        {
+          "ttft_sec": 0.06261640000047919,
+          "tpot_sec": 0.017529606349203926,
+          "decode_sec": 1.1043651999998474,
+          "e2e_sec": 1.166982900000221,
+          "throughput_tok_per_sec": 54.84227746609473,
+          "generated_tokens": 64
+        },
+        {
+          "ttft_sec": 0.21510899999975663,
+          "tpot_sec": 0.025901050793652843,
+          "decode_sec": 1.6317662000001292,
+          "e2e_sec": 1.8468769000000975,
+          "throughput_tok_per_sec": 34.65309463776206,
+          "generated_tokens": 64
+        }
+      ],
+      "generated_tokens": 64,
+      "ttft_sec": 0.1188428666667581,
+      "ttft_sec_std": 0.08376084672280612,
+      "tpot_sec": 0.019424718518517913,
+      "tpot_sec_std": 0.0057672310310154205,
+      "decode_sec": 1.2237572666666285,
+      "decode_sec_std": 0.3633355549539715,
+      "e2e_sec": 1.3426015000001523,
+      "e2e_sec_std": 0.4433682802689486,
+      "throughput_tok_per_sec": 50.87172841517712,
+      "throughput_tok_per_sec_std": 14.642829658899801
+    },
+    {
+      "context_len": 512,
+      "speed_repeats": 3,
+      "speed_warmup_runs": 1,
+      "raw_runs": [
+        {
+          "ttft_sec": 0.5650445000001127,
+          "tpot_sec": 0.016358993650794133,
+          "decode_sec": 1.0306166000000303,
+          "e2e_sec": 1.5956622000003335,
+          "throughput_tok_per_sec": 40.10873980720144,
+          "generated_tokens": 64
+        },
+        {
+          "ttft_sec": 0.48077639999974053,
+          "tpot_sec": 0.026124942857143375,
+          "decode_sec": 1.6458714000000327,
+          "e2e_sec": 2.126649200000429,
+          "throughput_tok_per_sec": 30.094291056553704,
+          "generated_tokens": 64
+        },
+        {
+          "ttft_sec": 0.6609353999992891,
+          "tpot_sec": 0.01882948253967784,
+          "decode_sec": 1.186257399999704,
+          "e2e_sec": 1.8471938999991835,
+          "throughput_tok_per_sec": 34.64714776290041,
+          "generated_tokens": 64
+        }
+      ],
+      "generated_tokens": 64,
+      "ttft_sec": 0.5689187666663807,
+      "ttft_sec_std": 0.09014196457178171,
+      "tpot_sec": 0.020437806349205116,
+      "tpot_sec_std": 0.005077742616800068,
+      "decode_sec": 1.2875817999999224,
+      "decode_sec_std": 0.3198977848584043,
+      "e2e_sec": 1.8565017666666488,
+      "e2e_sec_std": 0.26561584257852516,
+      "throughput_tok_per_sec": 34.95005954221852,
+      "throughput_tok_per_sec_std": 5.0140914036717295
+    },
+    {
+      "context_len": 1024,
+      "speed_repeats": 3,
+      "speed_warmup_runs": 1,
+      "raw_runs": [
+        {
+          "ttft_sec": 0.34062809999977617,
+          "tpot_sec": 0.015354058730158686,
+          "decode_sec": 0.9673056999999972,
+          "e2e_sec": 1.3079347999992024,
+          "throughput_tok_per_sec": 48.932102731756224,
+          "generated_tokens": 64
+        },
+        {
+          "ttft_sec": 0.3514736000006451,
+          "tpot_sec": 0.014902690476201458,
+          "decode_sec": 0.9388695000006919,
+          "e2e_sec": 1.290344100000766,
+          "throughput_tok_per_sec": 49.59917280976602,
+          "generated_tokens": 64
+        },
+        {
+          "ttft_sec": 0.28165809999973135,
+          "tpot_sec": 0.013938598412702655,
+          "decode_sec": 0.8781317000002673,
+          "e2e_sec": 1.159791000000041,
+          "throughput_tok_per_sec": 55.18235613140448,
+          "generated_tokens": 64
+        }
+      ],
+      "generated_tokens": 64,
+      "ttft_sec": 0.32458660000005085,
+      "ttft_sec_std": 0.037570577607687734,
+      "tpot_sec": 0.014731782539687599,
+      "tpot_sec_std": 0.000723041575323128,
+      "decode_sec": 0.9281023000003188,
+      "decode_sec_std": 0.045551619245357035,
+      "e2e_sec": 1.2526899666666698,
+      "e2e_sec_std": 0.08093220426631352,
+      "throughput_tok_per_sec": 51.23787722430891,
+      "throughput_tok_per_sec_std": 3.432263248737693
+    }
+  ],
+  "speed_repeats": 3,
+  "speed_warmup_runs": 1,
+  "gqa_cache_stats": null,
+  "kv_cache_stats": {
+    "summary": {
+      "num_events": 0
+    },
+    "events": []
+  },
+  "peak_memory_mb": null,
+  "eval_notes": [
+    "ppl_metrics is chunked teacher-forced PPL and does not apply KVPress cache compression.",
+    "cache_ppl_metrics uses cached autoregressive teacher forcing; KVPress compresses the prefill cache before scoring continuation tokens.",
+    "Speed metrics use manual greedy prefill/decode with warmup and repeated runs; TTFT is prefill-to-first-token wall time, TPOT is decode time divided by generated tokens after the first token."
+  ],
+  "timestamp": "2026-05-06 16:15:05"
+}

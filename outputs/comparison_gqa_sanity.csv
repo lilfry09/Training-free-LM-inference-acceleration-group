@@ -1,0 +1,4 @@
+dataset,kv_heads,kv_head_ratio,chunked_ppl,cached_ppl,throughput_tok_per_sec,throughput_tok_per_sec_std,cache_tokens,approx_kv_cache_mb,source
+wikitext,8,1.0,63.718854139590285,13.088739039473024,55.25937011619031,3.3623208127357005,512,12.0,gqa_sanity_kv8_wikitext_test.json
+wikitext,4,0.5,1240.5533837345238,1976.4458391732824,30.41930383584116,3.9528994667927333,512,6.0,gqa_sanity_kv4_wikitext_test.json
+wikitext,2,0.25,2258.0113025770925,3659.004913723472,31.046965961615804,10.075281716208009,512,3.0,gqa_sanity_kv2_wikitext_test.json

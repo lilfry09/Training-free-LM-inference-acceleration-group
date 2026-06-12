@@ -1,0 +1,7 @@
+method,kv_heads,cache_tokens,approx_kv_cache_mb,reduction_vs_baseline
+baseline / gqa_8kv,8,512,12.0,0.0%
+gqa_4kv,4,512,6.0,50.0%
+gqa_2kv,2,512,3.0,75.0%
+streamingllm_r0.25,8,384,9.0,25.0%
+streamingllm_r0.5,8,256,6.0,50.0%
+streamingllm_r0.75,8,128,3.0,75.0%

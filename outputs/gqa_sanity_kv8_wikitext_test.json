@@ -1,0 +1,143 @@
+{
+  "mode": "gqa",
+  "dataset": "wikitext",
+  "split": "test",
+  "device": "cpu",
+  "dtype": "float32",
+  "attn_implementation": "sdpa",
+  "gqa_impl": "reduced_kv_grouped_attention",
+  "gqa_num_heads": 8,
+  "gqa_kv_heads": 8,
+  "gqa_kv_head_ratio": 1.0,
+  "kvpress_method": null,
+  "kvpress_compression_ratio": null,
+  "kvpress_n_sink": null,
+  "ppl_metrics": {
+    "ppl": 63.718854139590285,
+    "nll_sum": 17012.59765625,
+    "tokens": 4095
+  },
+  "cache_ppl_metrics": {
+    "ppl": 13.088739039473024,
+    "nll_sum": 658.36857477596,
+    "tokens": 256,
+    "context_len": 512,
+    "requested_eval_tokens": 256
+  },
+  "speed_metrics": [
+    {
+      "context_len": 512,
+      "speed_repeats": 3,
+      "speed_warmup_runs": 1,
+      "raw_runs": [
+        {
+          "ttft_sec": 0.14573729999938223,
+          "tpot_sec": 0.01653319682537542,
+          "decode_sec": 1.0415913999986515,
+          "e2e_sec": 1.1873299999988376,
+          "throughput_tok_per_sec": 53.90245340390848,
+          "generated_tokens": 64
+        },
+        {
+          "ttft_sec": 0.16497589999926277,
+          "tpot_sec": 0.01457382857142153,
+          "decode_sec": 0.9181511999995564,
+          "e2e_sec": 1.0831281999999192,
+          "throughput_tok_per_sec": 59.08811163812813,
+          "generated_tokens": 64
+        },
+        {
+          "ttft_sec": 0.23874830000022484,
+          "tpot_sec": 0.01545487936507723,
+          "decode_sec": 0.9736573999998654,
+          "e2e_sec": 1.212407200000598,
+          "throughput_tok_per_sec": 52.78754530653433,
+          "generated_tokens": 64
+        }
+      ],
+      "generated_tokens": 64,
+      "ttft_sec": 0.18315383333295662,
+      "ttft_sec_std": 0.04909775428166088,
+      "tpot_sec": 0.015520634920624728,
+      "tpot_sec_std": 0.0009813377774571808,
+      "decode_sec": 0.9777999999993577,
+      "decode_sec_std": 0.061824279979802374,
+      "e2e_sec": 1.1609551333331183,
+      "e2e_sec_std": 0.06855647419478149,
+      "throughput_tok_per_sec": 55.25937011619031,
+      "throughput_tok_per_sec_std": 3.3623208127357005
+    }
+  ],
+  "speed_repeats": 3,
+  "speed_warmup_runs": 1,
+  "gqa_cache_stats": {
+    "impl": "reduced_kv_grouped_attention",
+    "num_layers": 6,
+    "query_heads": 8,
+    "kv_heads": 8,
+    "kv_head_ratio": 1.0,
+    "context_len": 512,
+    "head_dim": 64,
+    "sample_layer_shapes": [
+      {
+        "layer_idx": 0,
+        "key_shape": [
+          1,
+          8,
+          512,
+          64
+        ],
+        "value_shape": [
+          1,
+          8,
+          512,
+          64
+        ]
+      },
+      {
+        "layer_idx": 1,
+        "key_shape": [
+          1,
+          8,
+          512,
+          64
+        ],
+        "value_shape": [
+          1,
+          8,
+          512,
+          64
+        ]
+      },
+      {
+        "layer_idx": 2,
+        "key_shape": [
+          1,
+          8,
+          512,
+          64
+        ],
+        "value_shape": [
+          1,
+          8,
+          512,
+          64
+        ]
+      }
+    ]
+  },
+  "kv_cache_stats": {
+    "summary": {
+      "num_events": 0
+    },
+    "events": []
+  },
+  "peak_memory_mb": null,
+  "eval_notes": [
+    "ppl_metrics is chunked teacher-forced PPL and does not apply KVPress cache compression.",
+    "cache_ppl_metrics uses cached autoregressive teacher forcing; KVPress compresses the prefill cache before scoring continuation tokens.",
+    "Speed metrics use manual greedy prefill/decode with warmup and repeated runs; TTFT is prefill-to-first-token wall time, TPOT is decode time divided by generated tokens after the first token.",
+    "GQA uses training-free reduced-KV grouped attention with 8 cached KV heads."
+  ],
+  "timestamp": "2026-05-06 17:24:06"
+}

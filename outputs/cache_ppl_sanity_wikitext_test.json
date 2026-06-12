@@ -1,0 +1,35 @@
+{
+  "dataset": "wikitext",
+  "split": "test",
+  "device": "cpu",
+  "dtype": "float32",
+  "attn_implementation": "sdpa",
+  "exact_ppl_metrics": {
+    "ppl": 63.718854139590285,
+    "nll_sum": 17012.59765625,
+    "tokens": 4095
+  },
+  "same_slice_teacher_forced_ppl_metrics": {
+    "ppl": 13.088025287142292,
+    "nll_sum": 658.3546142578125,
+    "tokens": 256,
+    "context_len": 512,
+    "requested_eval_tokens": 256,
+    "target_token_start": 512,
+    "target_token_end_exclusive": 768
+  },
+  "cache_ppl_metrics": {
+    "ppl": 13.088739039473024,
+    "nll_sum": 658.36857477596,
+    "tokens": 256,
+    "context_len": 512,
+    "requested_eval_tokens": 256
+  },
+  "absolute_ppl_difference_same_slice": 0.0007137523307321203,
+  "eval_notes": [
+    "Exact PPL covers the full max_eval_tokens window.",
+    "Same-slice teacher-forced PPL and cached PPL score the identical continuation tokens.",
+    "A small same-slice difference supports using cached PPL as a cache-scoring metric, but cached PPL is not directly comparable to full-window exact PPL."
+  ],
+  "timestamp": "2026-05-06 16:23:01"
+}

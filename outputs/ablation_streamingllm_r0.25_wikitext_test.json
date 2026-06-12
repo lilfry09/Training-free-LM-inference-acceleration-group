@@ -1,0 +1,282 @@
+{
+  "mode": "kvpress",
+  "dataset": "wikitext",
+  "split": "test",
+  "device": "cpu",
+  "dtype": "float32",
+  "attn_implementation": "sdpa",
+  "gqa_impl": null,
+  "gqa_num_heads": null,
+  "gqa_kv_heads": null,
+  "gqa_kv_head_ratio": null,
+  "kvpress_method": "streamingllm",
+  "kvpress_compression_ratio": 0.25,
+  "kvpress_n_sink": 4,
+  "ppl_metrics": {
+    "ppl": 63.718854139590285,
+    "nll_sum": 17012.59765625,
+    "tokens": 4095
+  },
+  "cache_ppl_metrics": {
+    "ppl": 22.918876671815422,
+    "nll_sum": 801.7819852331959,
+    "tokens": 256,
+    "context_len": 512,
+    "requested_eval_tokens": 256
+  },
+  "speed_metrics": [
+    {
+      "context_len": 512,
+      "speed_repeats": 3,
+      "speed_warmup_runs": 1,
+      "raw_runs": [
+        {
+          "ttft_sec": 2.5511803000008513,
+          "tpot_sec": 0.03381238095238269,
+          "decode_sec": 2.1301800000001094,
+          "e2e_sec": 4.681362100000115,
+          "throughput_tok_per_sec": 13.671234703249814,
+          "generated_tokens": 64
+        },
+        {
+          "ttft_sec": 0.8125851000004332,
+          "tpot_sec": 0.022210763492059037,
+          "decode_sec": 1.3992780999997194,
+          "e2e_sec": 2.211864599999899,
+          "throughput_tok_per_sec": 28.934863372741226,
+          "generated_tokens": 64
+        },
+        {
+          "ttft_sec": 0.9147162999997818,
+          "tpot_sec": 0.03620339999999112,
+          "decode_sec": 2.2808141999994405,
+          "e2e_sec": 3.1955314999995608,
+          "throughput_tok_per_sec": 20.027967178545666,
+          "generated_tokens": 64
+        }
+      ],
+      "generated_tokens": 64,
+      "ttft_sec": 1.426160566667022,
+      "ttft_sec_std": 0.9756329974925084,
+      "tpot_sec": 0.030742181481477615,
+      "tpot_sec_std": 0.00748452154143054,
+      "decode_sec": 1.9367574333330897,
+      "decode_sec_std": 0.47152485711012393,
+      "e2e_sec": 3.3629193999998583,
+      "e2e_sec_std": 1.2432290647449935,
+      "throughput_tok_per_sec": 20.878021751512236,
+      "throughput_tok_per_sec_std": 7.667237743985514
+    }
+  ],
+  "speed_repeats": 3,
+  "speed_warmup_runs": 1,
+  "gqa_cache_stats": null,
+  "kv_cache_stats": {
+    "summary": {
+      "num_events": 30,
+      "before_len_min": 512,
+      "before_len_max": 512,
+      "after_len_min": 384,
+      "after_len_max": 384,
+      "avg_compression_ratio_actual": 0.25,
+      "by_before_len": [
+        {
+          "before_len": 512,
+          "after_len_min": 384,
+          "after_len_max": 384,
+          "num_events": 30
+        }
+      ]
+    },
+    "events": [
+      {
+        "layer_idx": 0,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 1,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 2,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 3,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 4,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 5,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 0,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 1,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 2,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 3,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 4,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 5,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 0,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 1,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 2,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 3,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 4,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 5,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 0,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 1,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 2,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 3,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 4,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 5,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 0,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 1,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 2,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 3,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 4,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      },
+      {
+        "layer_idx": 5,
+        "before_len": 512,
+        "after_len": 384,
+        "compression_ratio_actual": 0.25
+      }
+    ]
+  },
+  "peak_memory_mb": null,
+  "eval_notes": [
+    "ppl_metrics is chunked teacher-forced PPL and does not apply KVPress cache compression.",
+    "cache_ppl_metrics uses cached autoregressive teacher forcing; KVPress compresses the prefill cache before scoring continuation tokens.",
+    "Speed metrics use manual greedy prefill/decode with warmup and repeated runs; TTFT is prefill-to-first-token wall time, TPOT is decode time divided by generated tokens after the first token.",
+    "KVPress uses method=streamingllm, compression_ratio=0.25, n_sink=4."
+  ],
+  "timestamp": "2026-05-06 17:11:28"
+}

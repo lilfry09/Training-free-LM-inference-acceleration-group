@@ -1,94 +1,136 @@
-# Layer-wise Adaptive KV Cache Compression
+# Training-Free LM Inference Acceleration Group Project
 
-Training-free KV cache compression for causal language model inference.  The
-main implementation uses a prefill-then-compress policy: run the prompt once
-with a full KV cache, compress each layer according to its position, then decode
-with the compressed cache.
+This repository is the group-part submission for training-free language-model
+inference acceleration.  It integrates and evaluates several methods on
+Pythia-70M without changing model weights:
+
+- Baseline SDPA inference
+- Training-free reduced-KV GQA conversion
+- KVPress-Knorm cache compression
+- KVPress-StreamingLLM cache compression
+- Additional layer-wise sink-plus-recent KV compression prototype
+
+The report is written with the provided NeurIPS 2025 template:
+`paper.tex`, `paper.pdf`, and `neurips_2025.sty`.
 
 ## Quick Start
 
-This project reuses the local Pythia-70M model prepared in the sibling
-`finalproj` directory:
+Run commands from this repository:
 
 ```powershell
-cd D:\SJTUlearning\2026Spring\NLP\FinalProject\layerwise-kv-compression
+cd D:\SJTUlearning\2026Spring\NLP\FinalProject\Training-free-LM-inference-acceleration-group
 pip install -r requirements.txt
-python eval_quick.py
+```
+
+Prepare local assets if they are not already available:
+
+```powershell
+.\scripts\prepare_assets.ps1
+```
+
+This downloads `EleutherAI/pythia-70m`, WikiText-103, and one PG-19 sample
+into local `models/` and `datasets/` directories.  These large assets are not
+committed to Git.
+
+## Reproduce Group Experiments
+
+Run the full matrix:
+
+```powershell
+.\scripts\run_matrix.ps1
+```
+
+This evaluates:
+
+- `baseline`
+- `gqa` with 2 cached KV heads
+- `kvpress knorm` with compression ratio 0.5
+- `kvpress streamingllm` with compression ratio 0.5 and 4 sink tokens
+
+on both WikiText and PG-19.  Outputs are written to:
+
+- `outputs/comparison_quality.md`
+- `outputs/comparison_speed.md`
+- `outputs/comparison_quality.csv`
+- `outputs/comparison_speed.csv`
+
+Extra diagnostics:
+
+```powershell
+.\scripts\run_ablations.ps1
+.\scripts\run_cache_ppl_sanity.ps1 -Dataset wikitext -Split test
+.\scripts\run_qualitative_examples.ps1
+```
+
+## Layer-wise Compression Prototype
+
+The additional layer-wise implementation is kept as a compact reproducible
+prototype:
+
+```powershell
+python eval_quick.py --dataset pg19 --output_json results_pg19.json
+python eval_quick.py --dataset wikitext --output_json results_wikitext.json
 ```
 
 Default paths:
 
-- Model: `..\finalproj\models\pythia-70m`
-- Text sample: `..\finalproj\datasets\pg19_samples\test_1.txt`
-- Output: `results.json`
+- Model: `..\finalproj\models\pythia-70m` or local `models\pythia-70m`
+- PG-19 sample: `..\finalproj\datasets\pg19_samples\test_1.txt`
+- WikiText split: `..\finalproj\datasets\wikitext-103-raw-v1\test`
 
-You can override them:
+## Main Results
 
-```powershell
-python eval_quick.py --model_path ..\finalproj\models\pythia-70m --text_path ..\finalproj\datasets\pg19_samples\test_1.txt
-```
+Quality summary from `outputs/comparison_quality.md`:
 
-## Method
+| Dataset | Method | Chunked PPL | Cached PPL | KV events | Avg. removed |
+|---|---|---:|---:|---:|---:|
+| WikiText | Baseline | 63.72 | 13.09 | 0 | -- |
+| WikiText | GQA-2KV | 2258.01 | 3659.00 | 0 | -- |
+| WikiText | KVPress-Knorm | 63.72 | 52.44 | 78 | 0.50 |
+| WikiText | KVPress-StreamingLLM | 63.72 | 61.30 | 78 | 0.50 |
+| PG-19 | Baseline | 33.57 | 29.60 | 0 | -- |
+| PG-19 | GQA-2KV | 816.70 | 776.88 | 0 | -- |
+| PG-19 | KVPress-Knorm | 33.57 | 31.76 | 78 | 0.50 |
+| PG-19 | KVPress-StreamingLLM | 33.57 | 29.49 | 78 | 0.50 |
 
-Pythia-70M has 6 transformer layers.  The layer-wise schedule is:
+Selected throughput observations from `outputs/comparison_speed.md`:
 
-| Layer group | Layers | Keep ratio | Motivation |
-|---|---:|---:|---|
-| Shallow | 0-1 | 80% | Preserve lower-level and semantic features |
-| Middle | 2-3 | 50% | Compress more aggressively |
-| Deep | 4-5 | 70% | Preserve final prediction context |
+| Dataset | Context | Baseline tok/s | Best compressed tok/s | Best method |
+|---|---:|---:|---:|---|
+| WikiText | 128 | 50.87 | 68.83 | StreamingLLM |
+| WikiText | 512 | 34.95 | 52.54 | StreamingLLM |
+| WikiText | 1024 | 51.24 | 43.89 | Knorm |
+| PG-19 | 128 | 74.31 | 66.41 | StreamingLLM |
+| PG-19 | 512 | 60.64 | 58.85 | StreamingLLM |
+| PG-19 | 1024 | 47.32 | 51.44 | StreamingLLM |
 
-The compressor keeps a small prefix (`keep_initial_tokens=4`) plus recent
-tokens, with `min_cache_tokens=16` to avoid over-compressing short contexts.
+Layer-wise quick-test results:
 
-Core files:
+| Dataset | Method | PPL | Tokens/s | Speedup | Cache reduction |
+|---|---|---:|---:|---:|---:|
+| PG-19 | Dense | 37.50 | 19.49 | 1.00x | 0.0% |
+| PG-19 | LayerWise-80/50/70 | 39.25 | 15.19 | 0.78x | 28.4% |
+| WikiText | Dense | 80.36 | 16.89 | 1.00x | 0.0% |
+| WikiText | LayerWise-80/50/70 | 82.30 | 36.41 | 2.16x | 28.4% |
 
-- `layerwise_compression.py`: reusable compression utilities and generation loop
-- `eval_quick.py`: real local-model evaluation script
-- `test_layerwise_compression.py`: unit tests for ratio scheduling and KV slicing
-- `paper.tex`: report draft using the bundled NeurIPS 2025 submission template
-- `neurips_2025.sty`, `lineno.sty`, `natbib.sty`: local template/style files needed for compilation
-- `paper.pdf`: compiled 4-page NeurIPS submission-style report with line numbers
-
-## Latest Results
-
-Command:
-
-```powershell
-python eval_quick.py
-```
-
-Environment:
-
-- Model: local `Pythia-70M`
-- Device: CPU, `torch.float32`
-- Dataset sample: PG-19 `test_1.txt`
-- PPL: cached continuation PPL with 96 prompt tokens and 64 scored tokens
-- Speed: greedy decode, 96 prompt tokens, 32 generated tokens, 2 repeats
-
-| Method | PPL | Time (s) | Tokens/s | Speedup | Cache reduction |
-|---|---:|---:|---:|---:|---:|
-| Dense | 37.5041 | 0.6647 | 48.1439 | 1.0000x | 0.0% |
-| Uniform-50% | 38.4568 | 1.8157 | 17.6239 | 0.3661x | 43.0% |
-| Uniform-67% | 36.0841 | 0.6518 | 49.0958 | 1.0198x | 27.8% |
-| LayerWise-80/50/70 | 39.2461 | 0.5826 | 54.9280 | 1.1410x | 28.4% |
-
-The result should be read conservatively because it is a small CPU quick test.
-It nevertheless demonstrates that the implementation performs real KV cache
-compression, not a theoretical speed estimate.
+The conservative conclusion is that KV cache compression can improve speed in
+some CPU settings, but gains depend on dataset, context length, compression
+overhead, and quality tolerance.  Naive training-free GQA is an honest negative
+result: it reduces cache size but severely damages PPL.
 
 ## Tests
 
 ```powershell
+python -m py_compile eval_quick.py layerwise_compression.py test_layerwise_compression.py
 python -m pytest -q
 ```
 
-Current status: `4 passed`.
+Current local status: `4 passed`.
 
-## Notes for Submission
+## Group Contribution
 
-- Use `eval_quick.py` and `results.json` as the primary reproducible evidence.
-- The older `quick_test.py`, `final_test.py`, and `real_compression_*.py` files
-  are exploratory prototypes; they are not the main reported implementation.
-- For a cleaner final hand-in, cite the local model path and the exact command
-  used to produce `results.json`.
+Current submitted workload statement:
+
+- Fu Ruoyu: method integration, reduced-KV GQA implementation, KVPress
+  evaluation adapter, layer-wise compression prototype, experiment scripts,
+  result analysis, README, and NeurIPS report.  Workload: 100%.

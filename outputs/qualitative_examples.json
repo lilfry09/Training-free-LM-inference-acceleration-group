@@ -1,0 +1,66 @@
+{
+  "prompt": "Efficient language model inference matters because long prompts require the model to",
+  "new_tokens": 48,
+  "decoding": "greedy",
+  "examples": [
+    {
+      "method": "baseline",
+      "prompt": "Efficient language model inference matters because long prompts require the model to",
+      "new_tokens": 48,
+      "continuation": " be a valid and reliable model.\n\nThe model is a model that is not a valid and reliable model. It is not a model that is valid and reliable. It is not a model that is valid and reliable. It is not",
+      "full_text": "Efficient language model inference matters because long prompts require the model to be a valid and reliable model.\n\nThe model is a model that is not a valid and reliable model. It is not a model that is valid and reliable. It is not a model that is valid and reliable. It is not"
+    },
+    {
+      "method": "kvpress_streamingllm_r0.5",
+      "prompt": "Efficient language model inference matters because long prompts require the model to",
+      "new_tokens": 48,
+      "continuation": " be used in the analysis of the data.\n\nThe model is a mixture of two or more parameters, and the model is a mixture of two or more parameters, and the model is a mixture of two or more parameters, and the",
+      "full_text": "Efficient language model inference matters because long prompts require the model to be used in the analysis of the data.\n\nThe model is a mixture of two or more parameters, and the model is a mixture of two or more parameters, and the model is a mixture of two or more parameters, and the",
+      "kvpress_events": [
+        {
+          "layer_idx": 0,
+          "before_len": 13,
+          "after_len": 6,
+          "compression_ratio_actual": 0.5384615384615384
+        },
+        {
+          "layer_idx": 1,
+          "before_len": 13,
+          "after_len": 6,
+          "compression_ratio_actual": 0.5384615384615384
+        },
+        {
+          "layer_idx": 2,
+          "before_len": 13,
+          "after_len": 6,
+          "compression_ratio_actual": 0.5384615384615384
+        },
+        {
+          "layer_idx": 3,
+          "before_len": 13,
+          "after_len": 6,
+          "compression_ratio_actual": 0.5384615384615384
+        },
+        {
+          "layer_idx": 4,
+          "before_len": 13,
+          "after_len": 6,
+          "compression_ratio_actual": 0.5384615384615384
+        },
+        {
+          "layer_idx": 5,
+          "before_len": 13,
+          "after_len": 6,
+          "compression_ratio_actual": 0.5384615384615384
+        }
+      ]
+    },
+    {
+      "method": "gqa_reduced_kv2",
+      "prompt": "Efficient language model inference matters because long prompts require the model to",
+      "new_tokens": 48,
+      "continuation": " the same as the same as the same as the same as the same as the same as the same as the same as the same as the same as the same as the same as the same as the same as the same as the same as",
+      "full_text": "Efficient language model inference matters because long prompts require the model to the same as the same as the same as the same as the same as the same as the same as the same as the same as the same as the same as the same as the same as the same as the same as the same as"
+    }
+  ]
+}
