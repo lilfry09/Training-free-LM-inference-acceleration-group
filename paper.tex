@@ -52,6 +52,11 @@ The course project requires a training-free acceleration method on Pythia-70M
 We focus on sequence-dimension KV compression: reducing how many historical
 positions remain in the cache.  The central question is whether a simple
 layer-wise budget can reduce cache and compute while preserving enough quality.
+This direction is related to KV-cache eviction and selection methods such as
+heavy-hitter retention \citep{zhang2023h2o}, prompt-observation based selection
+\citep{li2024snapkv}, attention-sink retention \citep{xiao2024attention}, and
+layer-varying cache budgets \citep{cai2024pyramidkv}.  Our implementation is a
+small training-free schedule rather than a full reproduction of these systems.
 
 Our contributions are: (1) a reusable layer-wise KV cache compressor for
 HuggingFace causal language models; (2) PG-19 and WikiText evaluations with PPL,
@@ -199,10 +204,30 @@ Merity, S., Xiong, C., Bradbury, J., and Socher, R.
 \newblock Pointer sentinel mixture models.
 \newblock arXiv:1609.07843, 2016.
 
-\bibitem[Rae et~al.(2020)]{rae2020compressive}
-Rae, J.~W., Potapenko, A., Jayakumar, S.~M., and Lillicrap, T.~P.
-\newblock Compressive transformers for long-range sequence modelling.
-\newblock \emph{ICLR}, 2020.
+\bibitem[Zhang et~al.(2023)]{zhang2023h2o}
+Zhang, Z., Sheng, Y., Zhou, T., Chen, T., Zheng, L., Cai, R., Song, Z., Tian, Y.,
+Re, C., Barrett, C., Wang, Z., and Chen, B.
+\newblock H2O: Heavy-hitter oracle for efficient generative inference of large
+language models.
+\newblock \emph{NeurIPS}, 2023.
+
+\bibitem[Li et~al.(2024)]{li2024snapkv}
+Li, Y., Huang, Y., Yang, B., Venkitesh, B., Locatelli, A., Ye, H., Cai, T.,
+Lewis, P., and Chen, D.
+\newblock SnapKV: LLM knows what you are looking for before generation.
+\newblock \emph{NeurIPS}, 2024.
+
+\bibitem[Xiao et~al.(2024)]{xiao2024attention}
+Xiao, G., Tian, Y., Chen, B., Han, S., and Lewis, M.
+\newblock Efficient streaming language models with attention sinks.
+\newblock \emph{ICLR}, 2024.
+
+\bibitem[Cai et~al.(2024)]{cai2024pyramidkv}
+Cai, Z., Zhang, Y., Gao, B., Liu, Y., Liu, T., Lu, K., Xiong, W., Dong, Y.,
+Chang, B., Hu, J., and Xiao, W.
+\newblock PyramidKV: Dynamic KV cache compression based on pyramidal information
+funneling.
+\newblock arXiv:2406.02069, 2024.
 
 \end{thebibliography}
 }
