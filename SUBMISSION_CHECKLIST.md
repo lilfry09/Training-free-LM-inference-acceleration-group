@@ -38,7 +38,9 @@ Verified locally:
 - `pytest`: 4 passed
 - `eval_quick.py --dataset pg19`: wrote `results_pg19.json`
 - `eval_quick.py --dataset wikitext`: wrote `results_wikitext.json`
-- `paper.pdf`: compiled with 4 pages in NeurIPS submission style
+- `paper.pdf`: compiled with 3 pages in NeurIPS submission style, within the
+  4-page course limit
+- `pdffonts paper.pdf`: all fonts are embedded Type 1 fonts; no Type 3 fonts
 
 ## Key Result Files
 

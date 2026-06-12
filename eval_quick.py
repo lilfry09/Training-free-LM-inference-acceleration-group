@@ -120,7 +120,7 @@ def load_model_and_tokenizer(model_path: Path, device: str, dtype: torch.dtype):
 
     model = AutoModelForCausalLM.from_pretrained(
         str(model_path),
-        torch_dtype=dtype,
+        dtype=dtype,
         local_files_only=True,
     )
     model.to(device)
