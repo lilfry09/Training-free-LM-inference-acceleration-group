@@ -197,12 +197,6 @@ conservative quality-preserving compression policy rather than a universal
 speedup.  This negative timing case is kept in the report to avoid overstating
 the method beyond what the CPU evidence supports.
 
-\paragraph{Group contribution statement.}
-Current submitted workload: Ruoyu Fu, Yiran Pang, and Yiqi Liu jointly prepared
-the group submission.  The implementation, PG-19/WikiText evaluation,
-analysis, README, and report were completed for the layer-wise KV compression
-project.  Workload: shared by the three listed authors.
-
 \section{Conclusion}
 
 We implemented a training-free layer-wise KV cache compression method for
@@ -213,10 +207,15 @@ on CPU, compression overhead can offset theoretical savings.  Future work should
 move compression into fused kernels and test longer contexts where KV-cache
 costs dominate more clearly.
 
-{\scriptsize
+\section*{Group Contribution Statement}
+Yiqi Liu surveyed related papers and proposed the initial layer-wise compression
+idea.  Yiran Pang was responsible for paper writing and report organization.
+Ruoyu Fu implemented the experiments, ran the PG-19/WikiText evaluations, and
+prepared the experimental analysis.  Workload: shared by the three listed
+authors.
+
+{\small
 \begin{thebibliography}{9}
-\setlength{\itemsep}{0pt}
-\setlength{\parsep}{0pt}
 
 \bibitem[Biderman et~al.(2023)]{biderman2023pythia}
 Biderman, S., Schoelkopf, H., Anthony, Q., Bradley, H., O'Brien, K., Hallahan, E., and others.
