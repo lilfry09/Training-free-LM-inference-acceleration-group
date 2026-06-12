@@ -1,20 +1,26 @@
 [
   {
     "method": "Dense",
-    "ppl": 1.54,
-    "time": 0.835,
+    "ppl": 39.09,
+    "ttft_ms": 64.6,
+    "tpot_ms": 20.21,
+    "time": 1.055,
     "speedup": "1.00x"
   },
   {
     "method": "Uniform-50%",
-    "ppl": 1.54,
-    "time": 0.653,
-    "speedup": "1.28x"
+    "ppl": 39.09,
+    "ttft_ms": 68.5,
+    "tpot_ms": 19.75,
+    "time": 1.036,
+    "speedup": "1.02x"
   },
   {
     "method": "LayerWise",
-    "ppl": 1.54,
-    "time": 0.653,
-    "speedup": "1.28x"
+    "ppl": 39.09,
+    "ttft_ms": 73.84,
+    "tpot_ms": 20.08,
+    "time": 1.058,
+    "speedup": "1.00x"
   }
 ]
