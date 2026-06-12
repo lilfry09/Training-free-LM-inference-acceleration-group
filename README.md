@@ -110,5 +110,6 @@ Current local status: `4 passed`.
 
 Current submitted workload statement:
 
-- Fu Ruoyu: layer-wise compression design, implementation, PG-19/WikiText
-  evaluation, error analysis, README, and NeurIPS report.  Workload: 100%.
+- Ruoyu Fu, Yiran Pang, and Yiqi Liu: jointly prepared the layer-wise
+  compression design, implementation, PG-19/WikiText evaluation, error analysis,
+  README, and NeurIPS report.  Workload: shared by the three listed authors.

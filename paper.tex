@@ -1,6 +1,6 @@
 \documentclass{article}
 
-\usepackage{neurips_2025}
+\usepackage[preprint]{neurips_2025}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
@@ -13,7 +13,7 @@
 \title{Layer-wise Adaptive KV Cache Compression for Training-Free Pythia-70M Inference}
 
 \author{
-  Fu Ruoyu \\
+  Ruoyu Fu \quad Yiran Pang \quad Yiqi Liu \\
   Shanghai Jiao Tong University \\
 }
 
@@ -141,6 +141,7 @@ LayerWise & 39.25 & 0.0715 & 0.0175 & 51.95 & 1.01 & 28.4\% \\
 \end{tabular}
 \end{center}
 
+\newpage
 \begin{center}
 \small
 \setlength{\tabcolsep}{3.5pt}
@@ -190,9 +191,10 @@ speedup.  This negative timing case is kept in the report to avoid overstating
 the method beyond what the CPU evidence supports.
 
 \paragraph{Group contribution statement.}
-Current submitted workload: Fu Ruoyu designed the layer-wise schedule,
-implemented the compressor and evaluation script, ran PG-19/WikiText
-experiments, wrote the analysis, README, and report.  Workload: 100\%.
+Current submitted workload: Ruoyu Fu, Yiran Pang, and Yiqi Liu jointly prepared
+the group submission.  The implementation, PG-19/WikiText evaluation,
+analysis, README, and report were completed for the layer-wise KV compression
+project.  Workload: shared by the three listed authors.
 
 \section{Conclusion}
 
@@ -204,8 +206,10 @@ on CPU, compression overhead can offset theoretical savings.  Future work should
 move compression into fused kernels and test longer contexts where KV-cache
 costs dominate more clearly.
 
-{\small
+{\scriptsize
 \begin{thebibliography}{9}
+\setlength{\itemsep}{0pt}
+\setlength{\parsep}{0pt}
 
 \bibitem[Biderman et~al.(2023)]{biderman2023pythia}
 Biderman, S., Schoelkopf, H., Anthony, Q., Bradley, H., O'Brien, K., Hallahan, E., and others.
