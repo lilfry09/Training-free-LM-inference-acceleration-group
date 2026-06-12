@@ -72,6 +72,13 @@ shallow layers $0$--$1$ keep 80\% of cached tokens, middle layers $2$--$3$ keep
 50\%, and deep layers $4$--$5$ keep 70\%.  The motivation is that shallow layers
 often preserve token-level features, middle layers can tolerate more
 compression, and deep layers should retain enough context for final prediction.
+This design is an original lightweight variant inspired by prior KV eviction,
+attention-sink, and layer-varying budget work
+\citep{zhang2023h2o,li2024snapkv,xiao2024attention,cai2024pyramidkv}: instead
+of estimating token importance with extra attention statistics, we use a fixed
+depth-dependent budget plus a sink-and-recent selector.  The ablation against
+Uniform-67\% isolates whether this non-uniform allocation helps beyond simply
+keeping the same average number of cached tokens.
 
 \paragraph{Token selector.}
 For each layer, the compressor keeps a small prefix of sink tokens and fills the
