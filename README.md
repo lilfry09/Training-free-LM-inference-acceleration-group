@@ -1,138 +1,92 @@
 # Layer-wise Adaptive KV Cache Compression
 
-> Training-free KV cache compression with layer-wise adaptive ratios for efficient LLM inference
+Training-free KV cache compression for causal language model inference.  The
+main implementation uses a prefill-then-compress policy: run the prompt once
+with a full KV cache, compress each layer according to its position, then decode
+with the compressed cache.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+## Quick Start
 
-## 🚀 Quick Start
+This project reuses the local Pythia-70M model prepared in the sibling
+`finalproj` directory:
 
-```bash
-# Install dependencies
+```powershell
+cd D:\SJTUlearning\2026Spring\NLP\FinalProject\layerwise-kv-compression
 pip install -r requirements.txt
-
-# Run evaluation
 python eval_quick.py
 ```
 
-## 💡 Key Idea
+Default paths:
 
-Different transformer layers have different characteristics:
-- **Shallow layers (0-30%)**: Encode semantics → keep 80% KV cache
-- **Middle layers (30-70%)**: Abstract representations → keep 50% KV cache  
-- **Deep layers (70-100%)**: Make decisions → keep 70% KV cache
+- Model: `..\finalproj\models\pythia-70m`
+- Text sample: `..\finalproj\datasets\pg19_samples\test_1.txt`
+- Output: `results.json`
 
-This layer-wise adaptive strategy achieves better compression than uniform ratios.
+You can override them:
 
-## 📊 Results (Honest Evaluation)
-
-| Method | PPL | Time(s) | KV Memory | Compression | Speedup |
-|--------|-----|---------|-----------|-------------|---------|
-| Dense | 39.09 | 2.112 | 600600 | 0% | 1.00× (baseline) |
-| Uniform-50% | 39.09 | 2.207 | 300300 | 50% | 0.96× (实际), 2.00× (理论) |
-| **LayerWise** | **39.09** | **2.170** | **380380** | **37%** | **0.97× (实际), 1.58× (理论)** |
-
-*Evaluated on Pythia-70M with 1000-token context on CPU*
-
-**Run to reproduce**: `python honest_eval.py`
-
-**Key Findings**:
-- ✅ **PPL maintained** - no quality degradation (39.09 across all methods)
-- ✅ **KV memory reduced** - LayerWise: 37% compression, Uniform: 50% compression
-- ✅ **Training-free** - immediate application without model retraining
-- ⚠️ **实际未加速** - Python实现overhead超过内存节省收益
-- 💡 **理论加速** - 在GPU + 大模型 + C++/CUDA实现下应有1.58×加速
-- 🎯 **创新点** - Layer-wise adaptive compression (不同层不同压缩率：80%/50%/70%)
-
-**Why no speedup in practice?**
-- Small model (70M) on CPU
-- Python implementation overhead
-- Expected to work better on: large models, GPU, optimized implementation
-
-## 🔬 Method
-
-### Algorithm
-
-```python
-def get_compression_ratio(layer_idx, total_layers):
-    position = layer_idx / total_layers
-    if position < 0.3:
-        return 0.8  # Shallow: keep 80%
-    elif position < 0.7:
-        return 0.5  # Middle: keep 50%
-    else:
-        return 0.7  # Deep: keep 70%
+```powershell
+python eval_quick.py --model_path ..\finalproj\models\pythia-70m --text_path ..\finalproj\datasets\pg19_samples\test_1.txt
 ```
 
-### Why This Works
+## Method
 
-1. **Shallow layers** need more cache because they encode semantic information
-2. **Middle layers** can be compressed more aggressively (abstract features are robust)
-3. **Deep layers** need moderate cache for final decision-making
+Pythia-70M has 6 transformer layers.  The layer-wise schedule is:
 
-This insight is supported by recent research on layer-wise attention patterns.
+| Layer group | Layers | Keep ratio | Motivation |
+|---|---:|---:|---|
+| Shallow | 0-1 | 80% | Preserve lower-level and semantic features |
+| Middle | 2-3 | 50% | Compress more aggressively |
+| Deep | 4-5 | 70% | Preserve final prediction context |
 
-## 📁 Repository Structure
+The compressor keeps a small prefix (`keep_initial_tokens=4`) plus recent
+tokens, with `min_cache_tokens=16` to avoid over-compressing short contexts.
 
-```
-.
-├── layerwise_compression.py  # Core algorithm
-├── eval_quick.py             # Evaluation script
-├── requirements.txt          # Dependencies
-├── results.json              # Experiment results
-└── paper.pdf                 # Technical report
-```
+Core files:
 
-## 🎯 Usage
+- `layerwise_compression.py`: reusable compression utilities and generation loop
+- `eval_quick.py`: real local-model evaluation script
+- `test_layerwise_compression.py`: unit tests for ratio scheduling and KV slicing
+- `paper.tex`: report draft
 
-### Basic Usage
+## Latest Results
 
-```python
-from layerwise_compression import SimpleLayerWiseKVCache
+Command:
 
-compressor = SimpleLayerWiseKVCache(
-    shallow=0.8,  # Keep 80% in shallow layers
-    middle=0.5,   # Keep 50% in middle layers
-    deep=0.7      # Keep 70% in deep layers
-)
+```powershell
+python eval_quick.py
 ```
 
-### Custom Configuration
+Environment:
 
-```python
-config = {
-    'shallow_ratio': 0.8,
-    'middle_ratio': 0.5, 
-    'deep_ratio': 0.7
-}
+- Model: local `Pythia-70M`
+- Device: CPU, `torch.float32`
+- Dataset sample: PG-19 `test_1.txt`
+- PPL: cached continuation PPL with 96 prompt tokens and 64 scored tokens
+- Speed: greedy decode, 96 prompt tokens, 32 generated tokens, 2 repeats
+
+| Method | PPL | Time (s) | Tokens/s | Speedup | Cache reduction |
+|---|---:|---:|---:|---:|---:|
+| Dense | 37.5041 | 0.6647 | 48.1439 | 1.0000x | 0.0% |
+| Uniform-50% | 38.4568 | 1.8157 | 17.6239 | 0.3661x | 43.0% |
+| Uniform-67% | 36.0841 | 0.6518 | 49.0958 | 1.0198x | 27.8% |
+| LayerWise-80/50/70 | 39.2461 | 0.5826 | 54.9280 | 1.1410x | 28.4% |
+
+The result should be read conservatively because it is a small CPU quick test.
+It nevertheless demonstrates that the implementation performs real KV cache
+compression, not a theoretical speed estimate.
+
+## Tests
+
+```powershell
+python -m pytest -q
 ```
 
-## 📝 Citation
+Current status: `4 passed`.
 
-```bibtex
-@article{layerwise2026,
-  title={Layer-wise Adaptive KV Cache Compression for Efficient LLM Inference},
-  author={Your Name},
-  year={2026}
-}
-```
+## Notes for Submission
 
-## 🔗 References
-
-- [PyramidKV: Dynamic KV Cache Compression](https://arxiv.org/abs/2406.02069)
-- [RocketKV: Two-Stage Compression](https://arxiv.org/abs/2502.14051)
-- [SnapKV: Importance-based Selection](https://arxiv.org/abs/2404.14469)
-
-## 📄 License
-
-MIT License - see LICENSE file for details
-
-## 🙏 Acknowledgments
-
-This project is inspired by recent advances in KV cache compression research, particularly:
-- NVIDIA's KVPress framework
-- Layer-wise heterogeneity studies (ICML 2026)
-- Attention dynamics research
-
----
-
-**Note**: This is a research prototype. For production use, further optimization and testing are recommended.
+- Use `eval_quick.py` and `results.json` as the primary reproducible evidence.
+- The older `quick_test.py`, `final_test.py`, and `real_compression_*.py` files
+  are exploratory prototypes; they are not the main reported implementation.
+- For a cleaner final hand-in, cite the local model path and the exact command
+  used to produce `results.json`.

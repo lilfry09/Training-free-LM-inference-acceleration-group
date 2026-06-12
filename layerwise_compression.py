@@ -1,179 +1,346 @@
 """
-Layer-wise Adaptive KV Cache Compression with Entropy Guidance
-核心算法实现 - Training-Free
+Layer-wise adaptive KV cache compression.
+
+This module implements a training-free sliding-window compressor for HuggingFace
+causal language models.  It does not patch model internals; instead it runs an
+explicit autoregressive loop and compresses `past_key_values` after each step.
 """
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from math import ceil
+from typing import Any, Iterable, Sequence
+
 import torch
-import torch.nn as nn
-from typing import Optional, Tuple
-import math
+import torch.nn.functional as F
 
 
-class LayerWiseAdaptiveCompression:
-    """层级自适应 + 熵引导的KV压缩"""
+@dataclass(frozen=True)
+class CompressionConfig:
+    """Layer-wise keep ratios for shallow, middle, and deep transformer blocks."""
 
-    def __init__(
-        self,
-        model,
-        shallow_ratio: float = 0.8,
-        middle_ratio: float = 0.5,
-        deep_ratio: float = 0.7,
-        entropy_threshold: float = 2.0,
-        use_entropy: bool = True
-    ):
-        self.model = model
-        self.shallow_ratio = shallow_ratio
-        self.middle_ratio = middle_ratio
-        self.deep_ratio = deep_ratio
-        self.entropy_threshold = entropy_threshold
-        self.use_entropy = use_entropy
+    shallow_ratio: float = 0.8
+    middle_ratio: float = 0.5
+    deep_ratio: float = 0.7
+    shallow_boundary: float = 0.3
+    deep_boundary: float = 0.7
+    keep_initial_tokens: int = 1
+    min_tokens: int = 1
 
-        # 统计信息（用于可视化）
-        self.compression_stats = {
-            'layer_ratios': [],
-            'entropy_values': [],
-            'kept_tokens': []
-        }
-
-        self._register_hooks()
-
-    def _register_hooks(self):
-        """注册forward hooks到每一层"""
-        try:
-            layers = self.model.gpt_neox.layers
-        except:
-            try:
-                layers = self.model.model.layers
-            except:
-                layers = self.model.transformer.h
-
-        self.total_layers = len(layers)
-
-        for idx, layer in enumerate(layers):
-            layer.layer_idx = idx
-            layer.register_forward_hook(self._make_compression_hook(idx))
-
-    def _make_compression_hook(self, layer_idx):
-        """创建压缩hook"""
-        def hook(module, input, output):
-            # 跳过第一层（保留完整语义）
-            if layer_idx == 0:
-                return output
-
-            # 获取压缩率
-            ratio = self._get_layer_ratio(layer_idx)
-
-            # 如果使用熵引导，需要计算attention熵
-            if self.use_entropy and hasattr(module, 'attention'):
-                # 尝试获取attention权重（不同模型结构不同）
-                # 这里简化处理
-                pass
-
-            # 记录统计
-            self.compression_stats['layer_ratios'].append(ratio)
-
-            return output
-
-        return hook
-
-    def _get_layer_ratio(self, layer_idx: int) -> float:
-        """根据层位置返回压缩率"""
-        ratio = layer_idx / self.total_layers
-
-        if ratio < 0.3:  # 浅层 (0-30%)
-            base_ratio = self.shallow_ratio
-        elif ratio < 0.7:  # 中层 (30-70%)
-            base_ratio = self.middle_ratio
-        else:  # 深层 (70-100%)
-            base_ratio = self.deep_ratio
-
-        return base_ratio
-
-    def compute_attention_entropy(self, attention_weights: torch.Tensor) -> float:
-        """计算attention分布的熵"""
-        # attention_weights: [batch, heads, seq_len, seq_len]
-        probs = attention_weights.softmax(dim=-1) + 1e-9
-        entropy = -(probs * torch.log(probs)).sum(dim=-1).mean()
-        return entropy.item()
-
-    def compress_kv_cache(
-        self,
-        past_key_values: Tuple[Tuple[torch.Tensor]],
-        layer_idx: int
-    ) -> Tuple[Tuple[torch.Tensor]]:
-        """压缩KV cache"""
-        if past_key_values is None:
-            return None
-
-        # 获取压缩率
-        keep_ratio = self._get_layer_ratio(layer_idx)
-
-        compressed = []
-        for layer_past in past_key_values:
-            key, value = layer_past
-            seq_len = key.shape[2]
-            keep_len = max(1, int(seq_len * keep_ratio))
-
-            # 简单策略：保留最近的token（sliding window）
-            compressed_key = key[:, :, -keep_len:, :]
-            compressed_value = value[:, :, -keep_len:, :]
-
-            compressed.append((compressed_key, compressed_value))
-
-            # 记录统计
-            self.compression_stats['kept_tokens'].append(keep_len)
-
-        return tuple(compressed)
-
-    def get_stats(self):
-        """返回压缩统计信息"""
-        return self.compression_stats
-
-    def reset_stats(self):
-        """重置统计"""
-        self.compression_stats = {
-            'layer_ratios': [],
-            'entropy_values': [],
-            'kept_tokens': []
-        }
+    def validate(self) -> None:
+        values = (
+            self.shallow_ratio,
+            self.middle_ratio,
+            self.deep_ratio,
+            self.shallow_boundary,
+            self.deep_boundary,
+        )
+        if any(value < 0 or value > 1 for value in values):
+            raise ValueError("ratios and boundaries must be in [0, 1]")
+        if self.shallow_boundary >= self.deep_boundary:
+            raise ValueError("shallow_boundary must be smaller than deep_boundary")
+        if self.keep_initial_tokens < 0 or self.min_tokens < 1:
+            raise ValueError("keep_initial_tokens must be >= 0 and min_tokens must be >= 1")
 
 
-def apply_compression(model, config: dict):
-    """应用压缩配置到模型"""
-    compressor = LayerWiseAdaptiveCompression(
-        model,
-        shallow_ratio=config.get('shallow_ratio', 0.8),
-        middle_ratio=config.get('middle_ratio', 0.5),
-        deep_ratio=config.get('deep_ratio', 0.7),
-        use_entropy=config.get('use_entropy', False)
+def layer_keep_ratio(layer_idx: int, total_layers: int, config: CompressionConfig) -> float:
+    """Return the keep ratio assigned to one transformer layer."""
+
+    config.validate()
+    if total_layers <= 0:
+        raise ValueError("total_layers must be positive")
+    if layer_idx < 0 or layer_idx >= total_layers:
+        raise ValueError(f"layer_idx must be in [0, {total_layers})")
+
+    shallow_end = max(1, round(config.shallow_boundary * total_layers))
+    deep_start = max(shallow_end + 1, round(config.deep_boundary * total_layers))
+    deep_start = min(deep_start, total_layers - 1)
+
+    if layer_idx < shallow_end:
+        return config.shallow_ratio
+    if layer_idx < deep_start:
+        return config.middle_ratio
+    return config.deep_ratio
+
+
+def build_layer_keep_ratios(total_layers: int, config: CompressionConfig) -> list[float]:
+    """Build the per-layer keep-ratio schedule."""
+
+    return [layer_keep_ratio(i, total_layers, config) for i in range(total_layers)]
+
+
+def infer_num_layers(model: Any) -> int:
+    """Infer the decoder layer count for common HuggingFace model families."""
+
+    if hasattr(model, "config") and hasattr(model.config, "num_hidden_layers"):
+        return int(model.config.num_hidden_layers)
+
+    candidate_paths = (
+        ("gpt_neox", "layers"),
+        ("model", "layers"),
+        ("transformer", "h"),
     )
-    return compressor
+    for first, second in candidate_paths:
+        block = getattr(model, first, None)
+        layers = getattr(block, second, None)
+        if layers is not None:
+            return len(layers)
+
+    raise ValueError("Could not infer layer count from model")
 
 
-# 简化版：直接修改generate时的KV cache
-class SimpleLayerWiseKVCache:
-    """最简单的实现：在generate时压缩"""
+def _to_legacy_cache(past_key_values: Any) -> tuple[Any, bool, Any]:
+    """Convert new HF Cache objects to legacy tuples when possible."""
 
-    def __init__(self, shallow=0.8, middle=0.5, deep=0.7):
-        self.ratios = {'shallow': shallow, 'middle': middle, 'deep': deep}
+    if hasattr(past_key_values, "to_legacy_cache"):
+        return past_key_values.to_legacy_cache(), True, past_key_values.__class__
+    return past_key_values, False, None
 
-    def compress(self, past_key_values, layer_idx, total_layers):
-        """压缩单层的KV cache"""
-        if past_key_values is None:
-            return None
 
-        # 确定比例
-        ratio_pos = layer_idx / total_layers
-        if ratio_pos < 0.3:
-            ratio = self.ratios['shallow']
-        elif ratio_pos < 0.7:
-            ratio = self.ratios['middle']
+def _from_legacy_cache(cache: tuple[Any, ...], was_cache_object: bool, cache_cls: Any) -> Any:
+    """Restore a cache object if the model originally returned one."""
+
+    if was_cache_object and hasattr(cache_cls, "from_legacy_cache"):
+        return cache_cls.from_legacy_cache(cache)
+    return cache
+
+
+def _slice_tokens(tensor: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
+    """Select cache tokens along the sequence dimension."""
+
+    return tensor.index_select(dim=2, index=indices)
+
+
+def _keep_indices(seq_len: int, keep_len: int, keep_initial_tokens: int, device: torch.device) -> torch.Tensor:
+    """Keep a small prefix plus the most recent tokens."""
+
+    keep_len = min(seq_len, max(1, keep_len))
+    prefix_len = min(keep_initial_tokens, keep_len, seq_len)
+    tail_len = keep_len - prefix_len
+
+    pieces = []
+    if prefix_len:
+        pieces.append(torch.arange(prefix_len, device=device))
+    if tail_len:
+        tail_start = max(prefix_len, seq_len - tail_len)
+        pieces.append(torch.arange(tail_start, seq_len, device=device))
+
+    if not pieces:
+        return torch.empty(0, dtype=torch.long, device=device)
+
+    return torch.cat(pieces).unique(sorted=True)
+
+
+def compress_past_key_values(
+    past_key_values: Any,
+    keep_ratios: Sequence[float],
+    *,
+    keep_initial_tokens: int = 1,
+    min_tokens: int = 1,
+) -> Any:
+    """Compress a HuggingFace `past_key_values` object or legacy tuple.
+
+    The compressor keeps a prefix token (useful as an anchor) and the newest
+    tokens.  It preserves layer order and tensor dtype/device.
+    """
+
+    if past_key_values is None:
+        return None
+
+    legacy_cache, was_cache_object, cache_cls = _to_legacy_cache(past_key_values)
+    compressed_layers = []
+
+    for layer_idx, layer_cache in enumerate(legacy_cache):
+        if len(layer_cache) < 2:
+            compressed_layers.append(layer_cache)
+            continue
+
+        key, value, *rest = layer_cache
+        ratio = keep_ratios[layer_idx] if layer_idx < len(keep_ratios) else keep_ratios[-1]
+        if ratio <= 0:
+            keep_len = min_tokens
         else:
-            ratio = self.ratios['deep']
+            keep_len = max(min_tokens, ceil(key.shape[2] * ratio))
 
-        # 压缩
-        key, value = past_key_values
-        seq_len = key.shape[2]
-        keep_len = max(1, int(seq_len * ratio))
+        if keep_len >= key.shape[2]:
+            compressed_layers.append(layer_cache)
+            continue
 
-        # 保留最近的token
-        return (key[:, :, -keep_len:, :], value[:, :, -keep_len:, :])
+        indices = _keep_indices(
+            seq_len=key.shape[2],
+            keep_len=keep_len,
+            keep_initial_tokens=keep_initial_tokens,
+            device=key.device,
+        )
+        compressed_layers.append((_slice_tokens(key, indices), _slice_tokens(value, indices), *rest))
+
+    return _from_legacy_cache(tuple(compressed_layers), was_cache_object, cache_cls)
+
+
+def cache_token_count(past_key_values: Any) -> int:
+    """Return the total number of cached token slots across layers."""
+
+    if past_key_values is None:
+        return 0
+
+    legacy_cache, _, _ = _to_legacy_cache(past_key_values)
+    return sum(layer_cache[0].shape[2] for layer_cache in legacy_cache if len(layer_cache) >= 1)
+
+
+class LayerWiseKVCompressor:
+    """Run generation and scoring with optional layer-wise KV compression."""
+
+    def __init__(self, model: Any, config: CompressionConfig | None = None):
+        self.model = model
+        self.config = config or CompressionConfig()
+        self.total_layers = infer_num_layers(model)
+        self.keep_ratios = build_layer_keep_ratios(self.total_layers, self.config)
+
+    @classmethod
+    def uniform(cls, model: Any, keep_ratio: float) -> "LayerWiseKVCompressor":
+        config = CompressionConfig(
+            shallow_ratio=keep_ratio,
+            middle_ratio=keep_ratio,
+            deep_ratio=keep_ratio,
+        )
+        return cls(model, config)
+
+    def describe_schedule(self) -> list[dict[str, float | int]]:
+        return [
+            {"layer": idx, "keep_ratio": ratio}
+            for idx, ratio in enumerate(self.keep_ratios)
+        ]
+
+    def _compress(self, past_key_values: Any) -> Any:
+        return compress_past_key_values(
+            past_key_values,
+            self.keep_ratios,
+            keep_initial_tokens=self.config.keep_initial_tokens,
+            min_tokens=self.config.min_tokens,
+        )
+
+    def _forward_step(
+        self,
+        input_ids: torch.Tensor,
+        past_key_values: Any,
+        absolute_position: int,
+    ) -> Any:
+        if input_ids.shape[1] == 1:
+            position_ids = torch.full(
+                (input_ids.shape[0], 1),
+                absolute_position,
+                dtype=torch.long,
+                device=input_ids.device,
+            )
+        else:
+            position_ids = torch.arange(
+                absolute_position,
+                absolute_position + input_ids.shape[1],
+                dtype=torch.long,
+                device=input_ids.device,
+            ).unsqueeze(0).expand(input_ids.shape[0], -1)
+
+        return self.model(
+            input_ids=input_ids,
+            past_key_values=past_key_values,
+            position_ids=position_ids,
+            use_cache=True,
+        )
+
+    @torch.no_grad()
+    def generate(
+        self,
+        input_ids: torch.Tensor,
+        *,
+        max_new_tokens: int = 50,
+        eos_token_id: int | None = None,
+        compress: bool = True,
+        compress_after_prefill_only: bool = True,
+    ) -> tuple[torch.Tensor, dict[str, float]]:
+        """Greedy generation with measured KV-cache retention statistics."""
+
+        self.model.eval()
+        generated = input_ids.clone()
+        past_key_values = None
+        retained_token_slots: list[int] = []
+
+        for step in range(max_new_tokens):
+            if past_key_values is None:
+                current_input = generated
+                absolute_position = 0
+            else:
+                current_input = generated[:, -1:]
+                absolute_position = generated.shape[1] - 1
+
+            outputs = self._forward_step(current_input, past_key_values, absolute_position)
+            next_token = outputs.logits[:, -1, :].argmax(dim=-1, keepdim=True)
+            generated = torch.cat([generated, next_token], dim=1)
+
+            past_key_values = outputs.past_key_values
+            should_compress = compress and (not compress_after_prefill_only or step == 0)
+            if should_compress:
+                past_key_values = self._compress(past_key_values)
+            retained_token_slots.append(cache_token_count(past_key_values))
+
+            if eos_token_id is not None and torch.all(next_token.eq(eos_token_id)):
+                break
+
+        stats = {
+            "avg_cache_tokens_per_layer": (
+                sum(retained_token_slots) / len(retained_token_slots) / self.total_layers
+                if retained_token_slots
+                else 0.0
+            ),
+            "generated_tokens": float(generated.shape[1] - input_ids.shape[1]),
+        }
+        return generated, stats
+
+    @torch.no_grad()
+    def perplexity(
+        self,
+        input_ids: torch.Tensor,
+        *,
+        compress: bool = True,
+        max_tokens: int | None = None,
+    ) -> tuple[float, dict[str, float]]:
+        """Compute autoregressive perplexity under the same cache policy."""
+
+        self.model.eval()
+        if input_ids.shape[1] < 2:
+            raise ValueError("perplexity requires at least two tokens")
+
+        if max_tokens is not None:
+            input_ids = input_ids[:, :max_tokens]
+
+        past_key_values = None
+        losses = []
+        retained_token_slots: list[int] = []
+
+        for idx in range(input_ids.shape[1] - 1):
+            current_input = input_ids[:, idx : idx + 1]
+            outputs = self._forward_step(current_input, past_key_values, idx)
+            target = input_ids[:, idx + 1]
+            losses.append(F.cross_entropy(outputs.logits[:, -1, :], target, reduction="none"))
+
+            past_key_values = outputs.past_key_values
+            if compress:
+                past_key_values = self._compress(past_key_values)
+            retained_token_slots.append(cache_token_count(past_key_values))
+
+        mean_nll = torch.cat(losses).mean()
+        stats = {
+            "avg_cache_tokens_per_layer": (
+                sum(retained_token_slots) / len(retained_token_slots) / self.total_layers
+                if retained_token_slots
+                else 0.0
+            ),
+            "scored_tokens": float(input_ids.shape[1] - 1),
+        }
+        return float(torch.exp(mean_nll).item()), stats
+
+
+def format_schedule(schedule: Iterable[dict[str, float | int]]) -> str:
+    """Render a compact schedule string for logs and README snippets."""
+
+    return ", ".join(f"L{item['layer']}={item['keep_ratio']:.2f}" for item in schedule)

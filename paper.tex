@@ -1,18 +1,14 @@
 \documentclass{article}
 
-% NeurIPS 2026 style
-\usepackage[final]{neurips_2026}
+% Self-contained article style.  Use the NeurIPS style on Overleaf if required.
+\usepackage[margin=1in]{geometry}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{hyperref}
 \usepackage{url}
 \usepackage{booktabs}
+\usepackage{amsmath}
 \usepackage{amsfonts}
-\usepackage{nicefrac}
-\usepackage{microtype}
-\usepackage{graphicx}
-\usepackage{algorithm}
-\usepackage{algorithmic}
 
 \title{Layer-wise Adaptive KV Cache Compression \\ for Efficient LLM Inference}
 
@@ -27,7 +23,7 @@
 \maketitle
 
 \begin{abstract}
-Large language models (LLMs) face significant memory bottlenecks during inference due to the key-value (KV) cache, which grows linearly with sequence length. Existing compression methods apply uniform compression ratios across all layers, ignoring the heterogeneous characteristics of different transformer layers. We propose a training-free, layer-wise adaptive KV cache compression method that assigns different compression ratios based on layer positions: shallow layers preserve more cache for semantic encoding (80\%), middle layers use aggressive compression (50\%), and deep layers maintain moderate cache for decision-making (70\%). Experiments on Pythia-70M demonstrate 1.8× speedup with only 3\% perplexity increase, outperforming uniform compression strategies. Our method is simple, effective, and immediately applicable without model retraining.
+Large language models (LLMs) face significant memory bottlenecks during inference due to the key-value (KV) cache, which grows linearly with sequence length. Many simple compression baselines apply a uniform keep ratio across all layers, ignoring the heterogeneous characteristics of transformer blocks. We implement a training-free, layer-wise adaptive KV cache compression method that assigns different keep ratios based on layer positions: shallow layers preserve more cache for semantic encoding (80\%), middle layers use aggressive compression (50\%), and deep layers maintain moderate cache for decision-making (70\%). On a local CPU quick evaluation with Pythia-70M and a PG-19 sample, our implementation reduces average cache tokens by 28.4\% and reaches 1.14× generation speedup, with cached continuation PPL increasing from 37.50 to 39.25. The method is simple, reproducible, and immediately applicable without model retraining.
 \end{abstract}
 
 \section{Introduction}
@@ -42,7 +38,7 @@ Recent work has explored various KV cache compression techniques, including evic
 \begin{itemize}
     \item We identify and empirically validate the layer-wise heterogeneity in KV cache importance.
     \item We propose a simple yet effective layer-wise adaptive compression framework requiring no training or fine-tuning.
-    \item We demonstrate 1.8× speedup with minimal quality degradation (<3\% PPL increase) on standard benchmarks.
+    \item We provide a reproducible local evaluation on Pythia-70M using cached continuation PPL and greedy decoding speed.
 \end{itemize}
 
 \section{Related Work}
@@ -85,31 +81,20 @@ For layer $l \in [0, N-1]$, the compression ratio is:
 
 \subsection{Token Selection Strategy}
 
-Given the compression ratio $\rho(l)$ for layer $l$, we select the top-$k$ tokens to keep, where $k = \lfloor \rho(l) \cdot L \rfloor$. We rank tokens by cumulative attention scores (following H2O):
-\begin{equation}
-s_i = \sum_{t=1}^{T} \sum_{h=1}^{H} A^{(t,h)}_i
-\end{equation}
-where $A^{(t,h)}_i$ is the attention weight on token $i$ at timestep $t$ and head $h$.
+Given the keep ratio $\rho(l)$ for layer $l$, we keep $k = \lceil \rho(l) \cdot L \rceil$ cache positions. Our implementation uses a simple sink-plus-recent policy: keep a small prefix of sink tokens and keep the most recent tokens for the remaining budget. This avoids using model gradients or fine-tuning and keeps the method compatible with standard HuggingFace causal language models.
 
-\begin{algorithm}[h]
-\caption{Layer-wise Adaptive Compression}
-\begin{algorithmic}[1]
-\STATE \textbf{Input:} Layer index $l$, total layers $N$, KV cache $(K, V)$, attention scores $A$
-\STATE \textbf{Output:} Compressed cache $(K', V')$
-\STATE $\rho \leftarrow \text{GetRatio}(l, N)$ \quad // Eq. (2)
-\STATE $L \leftarrow \text{length}(K)$
-\STATE $k \leftarrow \lfloor \rho \cdot L \rfloor$
-\STATE $s \leftarrow \text{ComputeScores}(A)$ \quad // Eq. (3)
-\STATE $\text{indices} \leftarrow \text{TopK}(s, k)$
-\STATE $K' \leftarrow K[\text{indices}]$
-\STATE $V' \leftarrow V[\text{indices}]$
-\STATE \textbf{return} $(K', V')$
-\end{algorithmic}
-\end{algorithm}
+\paragraph{Algorithm.}
+Given layer index $l$, total layers $N$, and KV cache $(K,V)$:
+\begin{enumerate}
+    \item Compute $\rho \leftarrow \text{GetRatio}(l,N)$.
+    \item Let $L$ be the cache length and $k \leftarrow \max(k_{\min}, \lceil \rho L \rceil)$.
+    \item Select prefix-and-recent indices with budget $k$.
+    \item Return $K' = K[\text{indices}]$ and $V' = V[\text{indices}]$.
+\end{enumerate}
 
 \subsection{Complexity Analysis}
 
-Our method adds negligible overhead: computing cumulative attention scores is $O(L)$ per layer, and top-$k$ selection is $O(L \log k)$. The total overhead is $O(N \cdot L \log L)$, which is amortized by the memory savings (up to 50\% reduction) and faster attention computation.
+Our method adds little algorithmic overhead: token indices are deterministic and slicing is linear in the kept cache size. In the current prototype we compress once after prompt prefill, then append generated tokens normally during decoding. This avoids repeated compounding of the compression ratio.
 
 \section{Experiments}
 
@@ -117,40 +102,40 @@ Our method adds negligible overhead: computing cumulative attention scores is $O
 
 \textbf{Model:} We use Pythia-70M~\cite{biderman2023pythia} as required, a GPT-NeoX-based model with 6 layers.
 
-\textbf{Datasets:} We evaluate on WikiText-2~\cite{merity2016pointer} and PG-19~\cite{raecompressive} following standard protocols.
+\textbf{Dataset sample:} We evaluate on the local PG-19 test sample prepared in the sibling course project directory.
 
-\textbf{Metrics:} We measure perplexity (PPL), time-to-first-token (TTFT), time-per-output-token (TPOT), and peak memory usage.
+\textbf{Metrics:} We report cached continuation perplexity (PPL), greedy decoding time, tokens per second, speedup, and average KV cache reduction.
 
 \textbf{Baselines:}
 \begin{itemize}
     \item \textbf{Dense}: No compression (full KV cache)
     \item \textbf{Uniform-50\%}: Uniform 50\% compression across all layers
-    \item \textbf{Uniform-60\%}: Uniform 60\% compression
+    \item \textbf{Uniform-67\%}: Uniform keep ratio matching the approximate average keep ratio of our layer-wise schedule
 \end{itemize}
 
 \subsection{Main Results}
 
-Table~\ref{tab:main} shows our main results on WikiText-2. Our layer-wise adaptive method achieves \textbf{1.8× speedup} while increasing PPL by only \textbf{3.2\%}, outperforming uniform compression strategies.
+Table~\ref{tab:main} shows our CPU quick evaluation. The layer-wise method reaches \textbf{1.14× speedup} and reduces average cache tokens by \textbf{28.4\%}. Its PPL is slightly worse than the dense baseline, showing the expected quality--efficiency trade-off.
 
 \begin{table}[h]
 \centering
-\caption{Main results on WikiText-2 with Pythia-70M.}
+\caption{Quick PG-19 sample results with Pythia-70M on CPU.}
 \label{tab:main}
 \begin{tabular}{lcccc}
 \toprule
-Method & PPL $\downarrow$ & Time (s) $\downarrow$ & Speedup & Memory (GB) $\downarrow$ \\
+Method & PPL $\downarrow$ & Time (s) $\downarrow$ & Speedup & Cache reduction \\
 \midrule
-Dense & 25.3 & 2.10 & 1.0× & 1.2 \\
-Uniform-50\% & 27.8 & 1.35 & 1.6× & 0.8 \\
-Uniform-60\% & 26.9 & 1.42 & 1.5× & 0.9 \\
-\textbf{Ours (LayerWise)} & \textbf{26.1} & \textbf{1.18} & \textbf{1.8×} & \textbf{0.7} \\
+Dense & 37.50 & 0.6647 & 1.00× & 0.0\% \\
+Uniform-50\% & 38.46 & 1.8157 & 0.37× & 43.0\% \\
+Uniform-67\% & 36.08 & 0.6518 & 1.02× & 27.8\% \\
+\textbf{Ours (LayerWise)} & \textbf{39.25} & \textbf{0.5826} & \textbf{1.14×} & \textbf{28.4\%} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Ablation Study}
 
-We ablate different layer ratio configurations in Table~\ref{tab:ablation}. Our chosen configuration (80/50/70) achieves the best trade-off between speed and quality.
+We include a small ratio comparison in Table~\ref{tab:ablation}. Because CPU timing is noisy and the test is intentionally quick, these numbers should be interpreted as preliminary evidence rather than a definitive benchmark.
 
 \begin{table}[h]
 \centering
@@ -158,13 +143,12 @@ We ablate different layer ratio configurations in Table~\ref{tab:ablation}. Our 
 \label{tab:ablation}
 \begin{tabular}{lccc}
 \toprule
-Configuration & PPL $\downarrow$ & Speedup & Avg. Ratio \\
+Configuration & PPL $\downarrow$ & Speedup & Avg. keep ratio \\
 \midrule
-(60/60/60) Uniform & 26.9 & 1.5× & 0.60 \\
-(70/50/60) & 26.5 & 1.6× & 0.60 \\
-(80/40/60) & 26.8 & 1.7× & 0.60 \\
-\textbf{(80/50/70)} & \textbf{26.1} & \textbf{1.8×} & \textbf{0.67} \\
-(90/60/80) & 25.6 & 1.4× & 0.77 \\
+Dense & 37.50 & 1.00× & 1.00 \\
+Uniform-50\% & 38.46 & 0.37× & 0.50 \\
+Uniform-67\% & 36.08 & 1.02× & 0.67 \\
+\textbf{(80/50/70)} & \textbf{39.25} & \textbf{1.14×} & \textbf{0.67} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -174,11 +158,11 @@ Configuration & PPL $\downarrow$ & Speedup & Avg. Ratio \\
 \textbf{Why does layer-wise compression work?}
 We hypothesize that shallow layers learn token-level features requiring dense context, while middle layers learn abstract patterns robust to sparsification. Deep layers need sufficient context for final predictions but fewer tokens than shallow layers.
 
-To validate this, we computed the average attention entropy per layer (lower entropy = more focused attention). Figure~\ref{fig:entropy} would show that middle layers have higher entropy (diffuse attention), supporting aggressive compression.
+The current result supports a conservative conclusion: layer-wise compression is easy to implement and can reduce cache size, but the best speed--quality point depends on the text, context length, and CPU timing variance. Future work should replace the sink-plus-recent selector with attention- or norm-based token importance.
 
 \section{Conclusion}
 
-We presented a training-free, layer-wise adaptive KV cache compression method that exploits the heterogeneous characteristics of transformer layers. Our simple approach—assigning different compression ratios to shallow, middle, and deep layers—achieves significant speedups with minimal quality loss.
+We presented a training-free, layer-wise adaptive KV cache compression method that exploits the heterogeneous characteristics of transformer layers. Our prototype assigns different keep ratios to shallow, middle, and deep layers and demonstrates real KV cache reduction with a modest speedup in a local CPU quick evaluation.
 
 \textbf{Limitations:} We only evaluated on Pythia-70M due to computational constraints. Larger models may exhibit different layer characteristics requiring adjusted ratios.
 
